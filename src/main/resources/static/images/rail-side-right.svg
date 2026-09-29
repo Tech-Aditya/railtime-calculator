@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 820" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Tall line-art for the right page margin (CSS mask; colour comes from the theme). -->
+
+  <!-- Locomotive, front view -->
+  <path d="M24 78 Q80 40 136 78"/>
+  <rect x="24" y="72" width="112" height="160" rx="14"/>
+  <circle cx="80" cy="60" r="6"/>
+  <rect x="36" y="88" width="38" height="40" rx="5"/>
+  <rect x="86" y="88" width="38" height="40" rx="5"/>
+  <path d="M24 142 H136" stroke-width="1.6"/>
+  <circle cx="46" cy="166" r="9"/>
+  <circle cx="114" cy="166" r="9"/>
+  <rect x="60" y="156" width="40" height="20" rx="3"/>
+  <path d="M40 200 H120 M40 212 H120" stroke-width="1.6"/>
+  <rect x="26" y="234" width="22" height="12" rx="3"/>
+  <rect x="112" y="234" width="22" height="12" rx="3"/>
+  <path d="M40 246 L54 272 H106 L120 246"/>
+  <path d="M60 256 V272 M80 256 V272 M100 256 V272" stroke-width="1.6"/>
+
+  <!-- Level-crossing sign -->
+  <rect x="28" y="344" width="104" height="16" rx="4" transform="rotate(28 80 352)"/>
+  <rect x="28" y="344" width="104" height="16" rx="4" transform="rotate(-28 80 352)"/>
+  <path d="M80 382 V486"/>
+  <path d="M64 486 H96"/>
+
+  <!-- Bogie (side view): frame, springs, two wheels -->
+  <path d="M60 548 l5 -10 l5 10 l5 -10 l5 10 l5 -10 l5 10 l5 -10 l5 10" stroke-width="2"/>
+  <rect x="18" y="548" width="124" height="26" rx="6"/>
+  <circle cx="48" cy="592" r="20"/><circle cx="48" cy="592" r="5"/>
+  <circle cx="112" cy="592" r="20"/><circle cx="112" cy="592" r="5"/>
+  <path d="M28 592 H68 M92 592 H132" stroke-width="1.6"/>
+
+  <!-- Track running up the margin -->
+  <path d="M50 656 V812 M110 656 V812"/>
+  <path d="M36 668 H124 M36 690 H124 M36 712 H124 M36 734 H124 M36 756 H124 M36 778 H124 M36 800 H124" stroke-width="2.4"/>
+</svg>

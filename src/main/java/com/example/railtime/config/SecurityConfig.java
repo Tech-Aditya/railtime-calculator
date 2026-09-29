@@ -1,5 +1,6 @@
 package com.example.railtime.config;
 
+import com.example.railtime.controller.Page;
 import com.example.railtime.properties.ApplicationProperties;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -94,8 +95,10 @@ public class SecurityConfig {
     SecurityFilterChain applicationChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, ApiPaths.STATIC_RESOURCES).permitAll()
+                        .requestMatchers(HttpMethod.GET, Page.PATHS).permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiPaths.PUBLIC + "/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, ApiPaths.USAGE).permitAll()
                         .requestMatchers(HttpMethod.GET, ACTUATOR_PUBLIC).permitAll()
                         // Public calculator API. The MVC layer enforces methods (405) and paths (404).
                         .requestMatchers(ApiPaths.BOOKING + "/**").permitAll()

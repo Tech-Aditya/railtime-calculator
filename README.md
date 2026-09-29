@@ -16,7 +16,7 @@
 6. [API](#api)
 7. [Running locally](#running-locally)
 8. [Docker](#docker)
-9. [Profiles & configuration](#profiles--configuration)
+9. [Profiles & configuration](#profiles--configuration) (including [Deploying to Render](#deploying-to-render))
 10. [Security](#security)
 11. [Performance](#performance)
 12. [Testing](#testing)
@@ -32,7 +32,12 @@
 |---|---|
 | **General reservation calculator** | Origin departure date → opening date/time (60-day ARP, 08:00 IST), with an optional boarding date. |
 | **Tatkal calculator** | Origin departure date + class → Tatkal opening (10:00 IST AC / 11:00 IST non-AC). |
-| **Today's booking windows** | A live strip showing the furthest journey date open today, the next date to open (with countdown), and today's Tatkal windows. |
+| **App layout** | A sidebar (Dashboard · Calculators · Tools · Developer) with a compact header. It collapses to icons (remembered per browser), is icon-only on tablets, and becomes a slide-in drawer on phones. Every page has its own URL (`/`, `/general`, `/tatkal`, `/refund`, `/chart`, `/status`, `/reminders`, `/rules`), so direct links, refresh and back/forward work. |
+| **Dashboard** | The next booking opening (live countdown), what is bookable today, Tatkal windows, quick links to each calculator and your recent calculations. |
+| **Booking status** | What you can book right now and what opens next, updated live. |
+| **Result actions** | Copy a clean text summary, share it (Web Share API, with copy as the fallback) and, for General/Tatkal, add a calendar reminder. |
+| **Reminders** | The reminders you added, with re-download and remove. Kept only in this browser. |
+| **Usage & traffic** | Anonymous counts on the dashboard: page visits (today, this week, this month, total), successful calculations per calculator, and a 30-day trend. `GET /api/v1/usage` serves them. Counts are kept in memory (the app has no database), so they reset when the server restarts, and the dashboard shows when counting began. Nothing personal is stored: no IP addresses, cookies or user IDs. Crawlers and monitors are not counted. |
 | **Cancellation refund estimate** | Class, ticket status, fare, passengers and departure → charge, GST and refund, per the 2015 refund rules. |
 | **Chart preparation time** | Departure date/time → first chart and final chart times, per the July 2025 Railway Board directive, with a countdown. |
 | **English and Hindi** | A language switcher in the header translates the whole interface, including results, errors and reminders. See [Languages](#languages). |
@@ -196,6 +201,7 @@ WebPageController                                             ▼
 GlobalExceptionHandler / JsonSecurityErrorHandler ──► ErrorResponseFactory
 ```
 
+* **One template, several pages.** `WebPageController` serves every page path (see the `Page` enum) with the same `index.html`; the path decides which view is visible at first paint, the page title, canonical URL and active sidebar item. `app.js` then switches views with the History API, so moving between pages is instant and keeps results. The same `Page` list drives the security allow-list, the ETag filter and language switching.
 * **Controllers are thin.** They handle binding, validation and HTTP concerns only.
 * **`BookingRuleService`** owns every rule: ARP arithmetic, Tatkal timing, status, the date window and notes. The calculators orchestrate it, and the web page reads from the same rules, so the page and the API can't disagree.
 * **Time is injected** as a `java.time.Clock` bean, so every "now" is deterministic in tests. All business logic uses `java.time` (`LocalDate`, `LocalTime`, `ZonedDateTime`, `ZoneId`, `Duration`, `ChronoUnit`) in `Asia/Kolkata`. There is no `Date`, `Calendar` or `SimpleDateFormat`.
@@ -310,29 +316,37 @@ Returns lightweight liveness JSON. For orchestrators, Actuator is available at `
 ### Errors
 
 Every error uses one shape. Stack traces are never returned.
+* `error` is a stable code that clients can branch on.
+* `message` says what is wrong and how to fix it.
+* `details` lists each problem field.
+* `requestId` also appears in the server log line for that request, so a reported problem can be traced.
 
 ```json
 {
   "timestamp": "2026-09-28T21:30:00+05:30",
   "status": 400,
   "error": "VALIDATION_ERROR",
-  "message": "Origin departure date is required",
-  "path": "/api/v1/booking/general/calculate",
-  "details": [{ "field": "originDepartureDate", "message": "Origin departure date is required" }]
+  "message": "totalFare must be a number",
+  "path": "/api/v1/booking/cancellation/calculate",
+  "details": [{ "field": "totalFare", "message": "totalFare must be a number" }],
+  "requestId": "d0a7a82d"
 }
 ```
 
-| HTTP | `error` | When |
-|---|---|---|
-| 400 | `VALIDATION_ERROR` | Missing required field, value out of range, or unknown enum value (the message lists the allowed values) |
-| 400 | `INVALID_DATE` | Not a real ISO date (for example `2026-02-30`) or `HH:mm` time, outside the accepted window, boarding before origin, cancellation at or after departure, or only one of cancellation date/time |
-| 400 | `INVALID_TRAVEL_CLASS` | Unknown class code |
-| 400 | `MALFORMED_REQUEST` | Missing body or invalid JSON |
-| 403 | `FORBIDDEN` | Endpoint not exposed (deny-by-default) |
-| 404 | `NOT_FOUND` | Unknown API path |
-| 405 | `METHOD_NOT_ALLOWED` | Wrong HTTP method |
-| 415 | `UNSUPPORTED_MEDIA_TYPE` | Body is not `application/json` |
-| 500 | `INTERNAL_ERROR` | Unexpected failure (generic message only) |
+| HTTP | `error` | When | Example `message` |
+|---|---|---|---|
+| 400 | `VALIDATION_ERROR` | Missing field, value out of range, wrong type, or unknown enum value. Several problems are all listed in `details`. | `Departure date is required (and 4 more problems, see details)`, `passengers must be a whole number`, `Invalid value for ticketStatus. Allowed values: …` |
+| 400 | `INVALID_DATE` | Not a real ISO date or `HH:mm` time, outside the accepted window, boarding before origin, cancellation at or after departure, or only one of cancellation date/time | `Times must be valid 24-hour times (HH:mm)` |
+| 400 | `INVALID_TRAVEL_CLASS` | Unknown class code | `Invalid travel class 'XY'. Allowed values: …` |
+| 400 | `MALFORMED_REQUEST` | Missing body, invalid JSON (with line and column), or a body that is not a JSON object | `Request body is not valid JSON (problem at line 1, column 29)` |
+| 403 | `FORBIDDEN` | Endpoint not exposed (deny-by-default). A browser opening an unknown page gets the friendly 404 page instead. | `Access to this resource is not permitted` |
+| 404 | `NOT_FOUND` | Unknown API path | `No API endpoint exists at this path` |
+| 405 | `METHOD_NOT_ALLOWED` | Wrong HTTP method (the `Allow` header lists the right one) | `HTTP method GET is not supported for this endpoint. Use POST.` |
+| 406 | `NOT_ACCEPTABLE` | `Accept` header asks for something other than JSON | `This API only returns JSON. …` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | Body is not `application/json` | `Content-Type 'text/plain' is not supported. …` |
+| 500 | `INTERNAL_ERROR` | Unexpected failure: a generic message and a reference, with details only in the log | `Something went wrong on our side. … quote reference 7f3a2c9e.` |
+
+The web page shows these messages too. When the server names specific fields, the message appears under the matching input (in Hindi, a translated message is shown).
 
 ### Swagger UI
 
@@ -372,7 +386,7 @@ Then open <http://localhost:8080>. The `dev` profile is active by default.
 The multi-stage build has two stages:
 
 1. **build** (`maven:3.9-eclipse-temurin-25`): resolves dependencies into a cached layer, runs the tests, packages the JAR and extracts Spring Boot layers.
-2. **runtime** (`eclipse-temurin:25-jre-alpine`): copies the layers ordered by change frequency, runs as the non-root user `railtime`, has a `HEALTHCHECK` on `/actuator/health/liveness`, and uses the `prod` profile by default.
+2. **runtime** (`eclipse-temurin:25-jre-alpine`): copies the layers ordered by change frequency, runs as the non-root user `railtime`, has a `HEALTHCHECK` on `/actuator/health/liveness` (on `$PORT`), and uses the `prod` profile by default. The web pages, CSS and JS are packaged inside the JAR, so the image serves the whole app.
 
 ```bash
 docker build -t railtime-calculator .
@@ -432,12 +446,38 @@ These values bind to the validated record `BookingRulesProperties` (`@Configurat
 | `SPRING_PROFILES_ACTIVE` | `dev` (`prod` in Docker) | Active profile |
 | `PORT` | `8080` | HTTP port |
 | `API_DOCS_ENABLED` | `true` in dev, `false` in prod | Expose Swagger/OpenAPI |
-| `SITE_URL` | `http://localhost:8080` | Canonical and Open Graph URLs |
+| `SITE_URL` | `RENDER_EXTERNAL_URL` on Render, else `http://localhost:8080` | Canonical and Open Graph URLs |
 | `CORS_ALLOWED_ORIGINS` | *(empty = same-origin only)* | Comma-separated origins allowed to call `/api/**` |
 | `BOOKING_ARP_DAYS` | `60` | Override the ARP if IRCTC changes it |
 | `SERVER_MAX_THREADS` | `100` | Tomcat worker threads (prod) |
+| `SHUTDOWN_TIMEOUT` | `20s` | How long graceful shutdown waits for in-flight requests |
+| `JAVA_TOOL_OPTIONS` | set in the Dockerfile | JVM flags (heap sized from the container limit) |
 
-The app has no secrets. If some are added later (for example a JWT issuer), supply them through environment variables and never commit them.
+The app has no secrets. [`.env.example`](.env.example) lists the variable names. If secrets are added later (for example a JWT issuer), supply them through environment variables and never commit them.
+
+---
+
+## Deploying to Render
+
+The repository includes a [`render.yaml`](render.yaml) Blueprint: one Docker web service, no database.
+
+1. Push the repository to GitHub (or GitLab).
+2. In Render, choose **New → Blueprint** and select the repository. Render reads `render.yaml`, builds the `Dockerfile` (tests run during the build) and deploys.
+3. Wait for the health check to pass. Render calls `GET /actuator/health`, which returns `{"status":"UP"}` without any details. The service is then live at `https://<name>.onrender.com`.
+
+On Render:
+* **Port.** Render injects `PORT` and the app binds to it (`server.port=${PORT:8080}`).
+* **Links.** Canonical and share links use Render's `RENDER_EXTERNAL_URL` automatically. Set `SITE_URL` only for a custom domain.
+* **Logs.** Output is structured ECS JSON on the console (the `prod` profile), which Render's log view shows as is.
+* **Deploys.** Graceful shutdown finishes in-flight requests (up to `SHUTDOWN_TIMEOUT`) on each deploy. The app is stateless, so any instance can serve any request.
+* **Free plan.** Instances sleep when idle, and the first request after that takes longer while the JVM starts.
+
+| Variable on Render | Required | Value |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | yes (set by `render.yaml`) | `prod` |
+| `API_DOCS_ENABLED` | no (default `false`) | `true` to publish Swagger UI |
+| `SITE_URL` | no | Your custom domain, e.g. `https://railtime.example.com` |
+| `CORS_ALLOWED_ORIGINS` | no | Only if other sites call the API from the browser |
 
 ---
 

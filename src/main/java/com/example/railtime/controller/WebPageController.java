@@ -3,6 +3,7 @@ package com.example.railtime.controller;
 import com.example.railtime.i18n.ClientMessages;
 import com.example.railtime.i18n.Language;
 import com.example.railtime.i18n.LanguageLocaleResolver;
+import com.example.railtime.model.TatkalCategory;
 import com.example.railtime.model.TravelClass;
 import com.example.railtime.model.response.BookingWindowResponse;
 import com.example.railtime.service.BookingWindowService;
@@ -22,7 +23,10 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.TreeSet;
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.http.CacheControl;
@@ -83,17 +87,51 @@ public class WebPageController {
                 Map.entry("chartPreviousDayTime", DateTimeUtil.formatTime(chart.previousDayChartTime())),
                 Map.entry("chartHoursBefore", chart.firstChartHoursBefore()),
                 Map.entry("finalChartMinutes", chart.finalChartMinutesBefore()),
-                Map.entry("clerkage", rules.cancellation().clerkage().stripTrailingZeros().toPlainString()));
+                Map.entry("clerkage", rules.cancellation().clerkage().stripTrailingZeros().toPlainString()),
+                // Context panels beside the forms: the same configured values the services use.
+                Map.entry("acClasses", classCodes(TatkalCategory.AC)),
+                Map.entry("nonAcClasses", classCodes(TatkalCategory.NON_AC)),
+                Map.entry("flatChargeGroups", flatChargeGroups(rules.cancellation())),
+                Map.entry("refundRules", rules.cancellation()),
+                Map.entry("refundQuarterRate", plain(rules.cancellation().quarterRatePercent())),
+                Map.entry("refundHalfRate", plain(rules.cancellation().halfRatePercent())));
     }
 
-    @GetMapping("/")
+    /** "2A, 3A, CC, EC, 3E" in the Tatkal dropdown order. */
+    private static String classCodes(TatkalCategory category) {
+        return TATKAL_CLASS_ORDER.stream().filter(tc -> tc.tatkalCategory() == category)
+                .map(TravelClass::code).collect(Collectors.joining(", "));
+    }
+
+    /** One flat cancellation charge and the classes it applies to, e.g. ₹180 → 3A / CC / 3E. */
+    public record FlatChargeGroup(String amount, String classes) {
+    }
+
+    /** Flat charges grouped by amount, highest first (e.g. ₹240: 1A / EC). */
+    static List<FlatChargeGroup> flatChargeGroups(BookingRulesProperties.Cancellation cancellation) {
+        Map<BigDecimal, List<String>> byAmount = new TreeMap<>(Comparator.reverseOrder());
+        for (TravelClass travelClass : TravelClass.values()) {
+            BigDecimal amount = cancellation.flatCharges().get(travelClass.code());
+            byAmount.computeIfAbsent(amount.stripTrailingZeros(), a -> new ArrayList<>()).add(travelClass.code());
+        }
+        return byAmount.entrySet().stream()
+                .map(e -> new FlatChargeGroup(plain(e.getKey()), String.join(" / ", e.getValue())))
+                .toList();
+    }
+
+    /** Every page shares one template; the path picks the page shown first (see {@link Page}). */
+    @GetMapping({"/", "/general", "/tatkal", "/refund", "/chart", "/status", "/reminders", "/rules"})
     public String index(Model model, HttpServletRequest request, HttpServletResponse response) {
         // Revalidate on every visit; the ETag filter turns unchanged pages into 304s.
         response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noCache().getHeaderValue());
         // The language comes from ?lang=, the language cookie or Accept-Language.
         response.setHeader(HttpHeaders.VARY, "Cookie, Accept-Language");
         Language language = LanguageLocaleResolver.resolveLanguage(request);
+        Page page = Page.fromPath(request.getRequestURI().substring(request.getContextPath().length()))
+                .orElse(Page.DASHBOARD);
         model.addAllAttributes(staticModel);
+        model.addAttribute("page", page);
+        model.addAttribute("pages", Page.values());
         model.addAttribute("lang", language);
         model.addAttribute("languages", Language.values());
         model.addAttribute("pageData", pageData.get(language));
@@ -109,8 +147,11 @@ public class WebPageController {
         return "index";
     }
 
-    /** Display strings for the "Today" strip, formatted exactly as app.js formats them. */
-    public record TodayStrip(String latest, String next, String nextWhen, String tatkal,
+    /**
+     * Display strings for the live booking windows, formatted exactly as app.js formats them.
+     * {@code nextTime} is the opening time ("08:00 AM IST"), {@code nextDay} is "Today" / "Tomorrow".
+     */
+    public record TodayStrip(String latest, String next, String nextTime, String nextDay, String tatkal,
                              String ac, boolean acOpen, String nonAc, boolean nonAcOpen) {
     }
 
@@ -126,7 +167,8 @@ public class WebPageController {
         return new TodayStrip(
                 medium.format(window.latestBookableJourneyDate()),
                 medium.format(next.journeyDate()),
-                messages.getMessage(opensToday ? "js.today.today" : "js.today.tomorrow", new Object[] {opensAt}, locale),
+                opensAt,
+                messages.getMessage(opensToday ? "js.today.today" : "js.today.tomorrow", null, locale),
                 medium.format(tatkal.journeyDate()),
                 messages.getMessage("js.today.ac", new Object[] {tatkal.acOpen() ? open : tatkal.acTimeDisplay()}, locale),
                 tatkal.acOpen(),

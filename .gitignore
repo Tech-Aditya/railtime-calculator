@@ -1,11 +1,37 @@
+# Build output
 target/
+build/
+out/
+.gradle/
+*.class
+
+# Logs
 *.log
-.idea/
-*.iml
-.vscode/
-.DS_Store
+logs/
+hs_err_pid*.log
+replay_pid*.log
+
+# Secrets and local environment (only the names template is committed)
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# IDEs and OS files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.DS_Store
+Thumbs.db
 
 # Local AI-assistant / tooling state
 .junie/

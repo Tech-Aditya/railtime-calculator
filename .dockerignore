@@ -1,17 +1,28 @@
-# Build output and local tooling never belong in the build context
+# Only pom.xml and src/ are needed to build the image; keep everything else out of the context.
+
+# Build output and local tooling
 target/
+build/
 .git/
 .gitignore
+.gitattributes
 .idea/
 .vscode/
 *.iml
 .claude/
+.junie/
+logs/
 *.log
+
+# Secrets / local environment
 .env
 .env.*
+*.pem
+*.key
 
-# Docs and container files are not needed to build the JAR
+# Docs, deployment and container files are not needed to build the JAR
 README.md
+render.yaml
 docker-compose.yml
 Dockerfile
 .dockerignore

@@ -76,5 +76,10 @@ class BookingCalculatorControllerTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(body).doesNotContain("secret internal detail").doesNotContain("at com.example");
+        // The message carries the same reference as the requestId field (and the log line).
+        String requestId = body.replaceAll("(?s).*\"requestId\":\"([0-9a-f]{8})\".*", "$1");
+        assertThat(requestId).matches("[0-9a-f]{8}");
+        assertThat(body).contains("Something went wrong on our side. Please try again later. If it keeps happening, quote reference "
+                + requestId + ".");
     }
 }

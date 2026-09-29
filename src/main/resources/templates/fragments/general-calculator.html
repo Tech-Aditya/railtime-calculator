@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  The General Booking calculator: one form and one result area, shown on the Dashboard and on the
+  General Booking page. The server renders them once (in whichever page is opened first) and app.js
+  moves the same elements between the two pages, so there is never a second copy and the user's
+  input and result carry over.
+-->
+
+<article th:fragment="card" id="general-card" class="calc-card kind-general" aria-labelledby="general-card-title">
+    <header class="card-hero">
+        <span class="card-icon" aria-hidden="true"><svg class="icon"><use href="#i-calendar"/></svg></span>
+        <div>
+            <p class="card-label" th:text="#{nav.general}">General Booking</p>
+            <h2 id="general-card-title" th:text="#{general.title(${arpDays})}">60-Day Booking Window</h2>
+            <p class="card-desc" th:text="#{page.general.desc}">Calculate when general railway reservation opens.</p>
+        </div>
+    </header>
+    <form id="general-form" class="calc-form" novalidate autocomplete="off" data-kind="general"
+          th:data-endpoint="@{/api/v1/booking/general/calculate}">
+        <div class="field">
+            <label for="general-date" th:text="#{field.originDate}">Origin departure date</label>
+            <input type="date" id="general-date" name="originDepartureDate" required
+                   th:min="${minDate}" th:max="${maxDate}"
+                   aria-describedby="general-date-help general-date-display general-date-error">
+            <p class="date-display" id="general-date-display"></p>
+            <p class="field-error" id="general-date-error" role="alert"></p>
+        </div>
+        <p class="field-help" id="general-date-help"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span th:text="#{help.originDate}">Booking uses the train’s originating-station departure date.</span></p>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary"><span class="btn-spinner" aria-hidden="true"></span><span class="btn-label" th:text="#{js.btn.calculate}">Calculate</span></button>
+            <button type="reset" class="text-btn"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg><span th:text="#{form.reset}">Reset</span></button>
+        </div>
+    </form>
+</article>
+
+<div th:fragment="result" class="result-region kind-general" id="result-general" aria-live="polite" aria-atomic="true"></div>
+
+</body>
+</html>

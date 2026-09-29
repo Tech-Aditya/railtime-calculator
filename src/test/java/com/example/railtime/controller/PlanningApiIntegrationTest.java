@@ -93,6 +93,34 @@ class PlanningApiIntegrationTest {
                 .andExpect(jsonPath("$.message").value(containsString(message)));
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "fare as text|{\"travelClass\":\"SL\",\"ticketStatus\":\"CONFIRMED\",\"totalFare\":\"abc\",\"passengers\":1,\"departureDate\":\"2026-12-20\",\"departureTime\":\"10:00\"}|VALIDATION_ERROR|totalFare|totalFare must be a number",
+            "passengers as text|{\"travelClass\":\"SL\",\"ticketStatus\":\"CONFIRMED\",\"totalFare\":100,\"passengers\":\"two\",\"departureDate\":\"2026-12-20\",\"departureTime\":\"10:00\"}|VALIDATION_ERROR|passengers|passengers must be a whole number",
+            "unknown status|{\"travelClass\":\"SL\",\"ticketStatus\":\"MAYBE\",\"totalFare\":100,\"passengers\":1,\"departureDate\":\"2026-12-20\",\"departureTime\":\"10:00\"}|VALIDATION_ERROR|ticketStatus|Invalid value for ticketStatus. Allowed values: CONFIRMED, CONFIRMED_TATKAL, RAC, WAITLISTED",
+            "time out of range|{\"travelClass\":\"SL\",\"ticketStatus\":\"CONFIRMED\",\"totalFare\":100,\"passengers\":1,\"departureDate\":\"2026-12-20\",\"departureTime\":\"25:00\"}|INVALID_DATE|departureTime|Times must be valid 24-hour times (HH:mm)",
+            "impossible date|{\"travelClass\":\"SL\",\"ticketStatus\":\"CONFIRMED\",\"totalFare\":100,\"passengers\":1,\"departureDate\":\"2026-02-30\",\"departureTime\":\"10:00\"}|INVALID_DATE|departureDate|Dates must be valid calendar dates in ISO-8601 format (yyyy-MM-dd)"
+    })
+    void wrongTypesNameTheField(String name, String body, String error, String field, String message) throws Exception {
+        postJson(CANCELLATION, body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(error))
+                .andExpect(jsonPath("$.message").value(message))
+                .andExpect(jsonPath("$.details[0].field").value(field))
+                .andExpect(jsonPath("$.details[0].message").value(message));
+    }
+
+    @Test
+    void severalMissingFieldsAreAllListed() throws Exception {
+        postJson(CANCELLATION, "{\"passengers\":1}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Departure date is required (and 4 more problems, see details)"))
+                .andExpect(jsonPath("$.details.length()").value(5))
+                .andExpect(jsonPath("$.details[*].field").value(org.hamcrest.Matchers.containsInAnyOrder(
+                        "departureDate", "departureTime", "ticketStatus", "totalFare", "travelClass")));
+    }
+
     @Test
     void chartReturnsFirstAndFinalChartTimes() throws Exception {
         postJson(CHART, """

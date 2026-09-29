@@ -76,6 +76,15 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void browsersOpeningAnUnknownPageGetTheFriendlyNotFoundPage() throws Exception {
+        // sendError(404) → the container renders error.html; API-style requests still get JSON 403 (above).
+        mvc.perform(get("/no-such-page").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/actuator/env").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void writeMethodsOutsideTheApiAreDenied() throws Exception {
         mvc.perform(post("/public/health")).andExpect(status().isForbidden());
     }

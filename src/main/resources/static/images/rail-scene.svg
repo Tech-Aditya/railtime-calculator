@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Line-art railway scene used as a faint page background (CSS mask; colour comes from the theme). -->
+  <defs>
+    <pattern id="sleepers" width="30" height="12" patternUnits="userSpaceOnUse">
+      <rect x="2" y="1" width="14" height="9" rx="1.5" fill="#000" stroke="none"/>
+    </pattern>
+  </defs>
+
+  <!-- Track: two rails on sleepers -->
+  <path d="M0 250 H1200 M0 256 H1200"/>
+  <rect x="0" y="259" width="1200" height="11" fill="url(#sleepers)" stroke="none"/>
+
+  <!-- Coach 1 -->
+  <g>
+    <path d="M60 128 Q200 106 340 128"/>
+    <rect x="60" y="128" width="280" height="92" rx="10"/>
+    <path d="M60 150 H340" stroke-width="1.6"/>
+    <rect x="86" y="146" width="26" height="26" rx="4"/>
+    <rect x="126" y="146" width="26" height="26" rx="4"/>
+    <rect x="166" y="146" width="26" height="26" rx="4"/>
+    <rect x="206" y="146" width="26" height="26" rx="4"/>
+    <rect x="246" y="146" width="26" height="26" rx="4"/>
+    <rect x="296" y="142" width="24" height="68" rx="3"/>
+    <path d="M60 222 H340"/>
+    <circle cx="100" cy="238" r="12"/><circle cx="100" cy="238" r="3"/>
+    <circle cx="132" cy="238" r="12"/><circle cx="132" cy="238" r="3"/>
+    <circle cx="268" cy="238" r="12"/><circle cx="268" cy="238" r="3"/>
+    <circle cx="300" cy="238" r="12"/><circle cx="300" cy="238" r="3"/>
+    <path d="M92 226 H140 M260 226 H308" stroke-width="2"/>
+  </g>
+  <path d="M340 200 H360" stroke-width="4"/>
+
+  <!-- Coach 2 -->
+  <g>
+    <path d="M360 128 Q500 106 640 128"/>
+    <rect x="360" y="128" width="280" height="92" rx="10"/>
+    <path d="M360 150 H640" stroke-width="1.6"/>
+    <rect x="380" y="142" width="24" height="68" rx="3"/>
+    <rect x="428" y="146" width="26" height="26" rx="4"/>
+    <rect x="468" y="146" width="26" height="26" rx="4"/>
+    <rect x="508" y="146" width="26" height="26" rx="4"/>
+    <rect x="548" y="146" width="26" height="26" rx="4"/>
+    <rect x="588" y="146" width="26" height="26" rx="4"/>
+    <path d="M360 222 H640"/>
+    <circle cx="400" cy="238" r="12"/><circle cx="400" cy="238" r="3"/>
+    <circle cx="432" cy="238" r="12"/><circle cx="432" cy="238" r="3"/>
+    <circle cx="568" cy="238" r="12"/><circle cx="568" cy="238" r="3"/>
+    <circle cx="600" cy="238" r="12"/><circle cx="600" cy="238" r="3"/>
+    <path d="M392 226 H440 M560 226 H608" stroke-width="2"/>
+  </g>
+  <path d="M640 200 H672" stroke-width="4"/>
+
+  <!-- Steam engine -->
+  <g>
+    <!-- cab -->
+    <path d="M668 108 H786"/>
+    <rect x="676" y="108" width="100" height="114" rx="4"/>
+    <rect x="696" y="126" width="54" height="36" rx="4"/>
+    <!-- boiler, dome, chimney, headlamp -->
+    <rect x="776" y="150" width="210" height="62" rx="30"/>
+    <path d="M800 150 V212 M830 150 V212" stroke-width="1.6"/>
+    <path d="M858 150 a20 20 0 0 1 40 0"/>
+    <rect x="938" y="112" width="24" height="38" rx="3"/>
+    <rect x="932" y="104" width="36" height="9" rx="3"/>
+    <circle cx="986" cy="170" r="8"/>
+    <!-- footplate, cowcatcher, buffers -->
+    <path d="M668 222 H1004"/>
+    <path d="M1004 222 L1034 248 H996"/>
+    <path d="M1004 204 H1016"/>
+    <!-- wheels with spokes -->
+    <g>
+      <circle cx="808" cy="224" r="26"/><circle cx="808" cy="224" r="5"/>
+      <path d="M808 198 V250 M782 224 H834 M790 206 L826 242 M826 206 L790 242" stroke-width="1.6"/>
+    </g>
+    <g>
+      <circle cx="868" cy="224" r="26"/><circle cx="868" cy="224" r="5"/>
+      <path d="M868 198 V250 M842 224 H894 M850 206 L886 242 M886 206 L850 242" stroke-width="1.6"/>
+    </g>
+    <g>
+      <circle cx="928" cy="224" r="26"/><circle cx="928" cy="224" r="5"/>
+      <path d="M928 198 V250 M902 224 H954 M910 206 L946 242 M946 206 L910 242" stroke-width="1.6"/>
+    </g>
+    <circle cx="986" cy="236" r="14"/><circle cx="986" cy="236" r="3"/>
+    <circle cx="722" cy="234" r="16"/><circle cx="722" cy="234" r="3"/>
+    <!-- coupling rod and piston -->
+    <path d="M808 232 H928" stroke-width="4"/>
+    <rect x="944" y="216" width="40" height="14" rx="3"/>
+    <!-- steam -->
+    <circle cx="944" cy="86" r="13"/>
+    <circle cx="908" cy="66" r="18"/>
+    <circle cx="862" cy="50" r="22"/>
+    <circle cx="808" cy="42" r="16"/>
+  </g>
+
+  <!-- Signal -->
+  <g>
+    <path d="M1110 250 V96"/>
+    <rect x="1094" y="70" width="32" height="62" rx="9"/>
+    <circle cx="1110" cy="88" r="7"/>
+    <circle cx="1110" cy="114" r="7"/>
+    <path d="M1096 250 H1124"/>
+  </g>
+</svg>

@@ -2,9 +2,11 @@
  * RailTime Calculator — front-end controller.
  *
  * All booking maths happens on the server. This script validates input, calls the API, renders the
- * shared result card (via <template> + textContent, never innerHTML) and runs a display-only
- * countdown anchored to the server-computed remaining time, so a wrong browser clock or time zone
- * cannot skew it.
+ * result cards (via <template> + textContent, never innerHTML) and runs display-only countdowns
+ * anchored to the server-computed remaining time, so a wrong browser clock or time zone cannot skew them.
+ *
+ * Every page has its own URL (/, /general, /tatkal, …) rendered by the server, so direct links and
+ * refresh work. Here, links between pages switch views in place (History API) without reloading.
  *
  * Language: the page embeds its translations and rule values in <script id="page-data">. The REST
  * API answers in English, so results are rendered here from the API's structured fields (dates,
@@ -15,14 +17,16 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MIN_LOADING_MS = 300;
 const REMINDER_ALARM_MINUTES = 15;
 const REMINDER_DURATION_MINUTES = 15;
+const FEEDBACK_MS = 3_500;
+const RECENT_LIMIT = 6;
 const MS = { second: 1_000, minute: 60_000, hour: 3_600_000, day: 86_400_000 };
 /** The API's own language: its error messages are shown verbatim only on pages in this language. */
 const API_LANGUAGE = 'en';
+const STORE = { theme: 'railtime.theme', sidebar: 'railtime.sidebar', recent: 'railtime.recent', reminders: 'railtime.reminders', carry: 'railtime.carry' };
 
 const PAGE = readPageData();
+const root = document.documentElement;
 const bounds = { min: document.body.dataset.minDate, max: document.body.dataset.maxDate };
-const resultRegion = document.getElementById('result-region');
-let countdown = null; // { units, stop }
 
 /* ------------------------------------------------------------------ i18n */
 
@@ -59,7 +63,22 @@ const money = (value) => rupees.format(Number(value));
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pad2 = (n) => String(n).padStart(2, '0');
 const cloneTemplate = (id) => document.getElementById(id).content.firstElementChild.cloneNode(true);
-const slot = (root, name) => root.querySelector(`[data-slot="${name}"]`);
+const slot = (root_, name) => root_.querySelector(`[data-slot="${name}"]`);
+const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+function readStore(key, fallback) {
+    try {
+        return JSON.parse(localStorage.getItem(key)) ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function writeStore(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch { /* storage unavailable: this session only */ }
+}
 
 /** Parses yyyy-MM-dd without going through the browser's time zone; null if not a real date. */
 function parseIsoDate(iso) {
@@ -105,32 +124,175 @@ function daysBetween(fromIso, toIso) {
     return Math.round((parseIsoDate(toIso) - parseIsoDate(fromIso)) / MS.day);
 }
 
+/** 36_900_000 → "10h 15m" (compact, for "Opens in …"). */
+function duration(ms) {
+    const d = Math.floor(ms / MS.day);
+    const h = Math.floor((ms % MS.day) / MS.hour);
+    const m = Math.floor((ms % MS.hour) / MS.minute);
+    const s = Math.floor((ms % MS.minute) / MS.second);
+    if (d > 0) return t('dur.days', d, h, m);
+    if (h > 0) return t('dur.hours', h, pad2(m));
+    return t('dur.minutes', m, pad2(s));
+}
+
 const className = (code, fallbackName) =>
     (hasMessage(`class.${code}`) ? t(`class.${code}`) : `${fallbackName ?? code} (${code})`);
 
-/* ------------------------------------------------------------------ header: menu, language */
+/* ------------------------------------------------------------------ pages (routing) */
 
-function initMenu() {
-    const toggle = document.querySelector('.nav-toggle');
-    const nav = document.getElementById('site-nav');
-    if (!toggle || !nav) return;
-    const setOpen = (open) => {
-        nav.classList.toggle('is-open', open);
-        toggle.setAttribute('aria-expanded', String(open));
-        toggle.setAttribute('aria-label', t(open ? 'menu.close' : 'menu.open'));
-    };
-    toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
-    nav.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
-    document.addEventListener('click', (e) => {
-        if (nav.classList.contains('is-open') && !nav.contains(e.target) && !toggle.contains(e.target)) setOpen(false);
+const views = new Map([...document.querySelectorAll('.view')].map((view) => [view.dataset.view, view]));
+const sidebarLink = (key) => document.querySelector(`.sb-link[data-nav="${key}"]`);
+const pathOf = (key) => sidebarLink(key)?.getAttribute('href') ?? '/';
+const CALCULATORS = ['general', 'tatkal', 'refund', 'chart'];
+/** Old single-page anchors (/#tatkal) still land on the right page. */
+const LEGACY_HASHES = { '#general': 'general', '#tatkal': 'tatkal', '#refund': 'refund', '#chart': 'chart', '#calculators': 'general', '#planning': 'refund', '#result': 'general', '#info': 'rules' };
+let currentPage = document.body.dataset.page;
+
+function pageFromPath(pathname) {
+    for (const key of views.keys()) {
+        if (pathOf(key) === pathname) return key;
+    }
+    return 'dashboard';
+}
+
+/**
+ * The General Booking calculator (form + result) exists once and is shown on both the Dashboard and
+ * the General Booking page: it is moved into the visible page's slots, keeping input, result and countdown.
+ */
+function placeGeneralCalculator(key) {
+    if (key !== 'dashboard' && key !== 'general') return;
+    const card = document.getElementById('general-card');
+    const result = document.getElementById('result-general');
+    const cardSlot = document.querySelector(`[data-general-slot="${key}-card"]`);
+    const resultSlot = document.querySelector(`[data-general-slot="${key}-result"]`);
+    if (card && cardSlot && card.parentElement !== cardSlot) cardSlot.append(card);
+    if (result && resultSlot && result.parentElement !== resultSlot) resultSlot.append(result);
+}
+
+/** Shows one page: view, active states, header title, document title, language links. */
+function showPage(key, { focus = false } = {}) {
+    if (!views.has(key)) return;
+    const changed = key !== currentPage;
+    currentPage = key;
+    document.body.dataset.page = key;
+    placeGeneralCalculator(key);
+    views.forEach((view, viewKey) => { view.hidden = viewKey !== key; });
+    document.querySelectorAll('.sb-link[data-nav], .calc-tab').forEach((link) => {
+        if (link.dataset.nav === key) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
     });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && nav.classList.contains('is-open')) {
-            setOpen(false);
-            toggle.focus();
-        }
+    document.querySelector('.calc-tabs').hidden = !CALCULATORS.includes(key);
+
+    const link = sidebarLink(key);
+    slot(document, 'header-page').textContent = link?.dataset.label ?? '';
+    slot(document, 'header-group').textContent = link?.closest('.sb-list')?.previousElementSibling?.textContent ?? '';
+    document.title = views.get(key).dataset.docTitle;
+    const path = pathOf(key);
+    document.querySelectorAll('.lang-option').forEach((option) => {
+        option.href = `${path}?lang=${option.dataset.lang}`;
+    });
+
+    if (key === 'dashboard') {
+        renderRecent();
+        loadUsage();
+    }
+    if (key === 'reminders') renderReminders();
+    if (changed) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        if (focus) views.get(key).querySelector('.view-focus')?.focus({ preventScroll: true });
+    }
+}
+
+function navigate(key, { replace = false } = {}) {
+    if (!views.has(key)) return;
+    closeDrawer();
+    if (key === currentPage) {
+        window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+        return;
+    }
+    const url = pathOf(key);
+    if (replace) history.replaceState({ page: key }, '', url);
+    else history.pushState({ page: key }, '', url);
+    showPage(key, { focus: true });
+}
+
+function initRouter() {
+    history.replaceState({ page: currentPage }, '', window.location.pathname + window.location.search);
+    const legacy = LEGACY_HASHES[window.location.hash];
+    if (legacy && currentPage === 'dashboard') {
+        history.replaceState({ page: legacy }, '', pathOf(legacy));
+        showPage(legacy);
+    } else {
+        showPage(currentPage);
+    }
+    document.addEventListener('click', (event) => {
+        const link = event.target.closest('a[data-nav]');
+        if (!link || event.defaultPrevented || event.button !== 0
+            || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target) return;
+        event.preventDefault();
+        navigate(link.dataset.nav);
+    });
+    window.addEventListener('popstate', () => showPage(pageFromPath(window.location.pathname), { focus: true }));
+}
+
+/* ------------------------------------------------------------------ sidebar: drawer (phones) and collapse */
+
+const sidebar = document.getElementById('sidebar');
+const backdrop = document.querySelector('.sb-backdrop');
+const drawerToggle = document.querySelector('.nav-toggle');
+const appMain = document.querySelector('.app-main');
+const phoneLayout = window.matchMedia('(max-width: 759px)');
+
+function openDrawer() {
+    sidebar.classList.add('is-open');
+    backdrop.hidden = false;
+    root.classList.add('drawer-open'); // no background scrolling
+    appMain.inert = true;
+    drawerToggle.setAttribute('aria-expanded', 'true');
+    drawerToggle.setAttribute('aria-label', t('menu.close'));
+    sidebar.querySelector('.sb-close').focus();
+}
+
+function closeDrawer({ restoreFocus = false } = {}) {
+    if (!sidebar.classList.contains('is-open')) return;
+    sidebar.classList.remove('is-open');
+    backdrop.hidden = true;
+    root.classList.remove('drawer-open');
+    appMain.inert = false;
+    drawerToggle.setAttribute('aria-expanded', 'false');
+    drawerToggle.setAttribute('aria-label', t('menu.open'));
+    if (restoreFocus) drawerToggle.focus();
+}
+
+function setCollapsed(collapsed) {
+    const button = document.querySelector('.sb-collapse');
+    if (collapsed) root.setAttribute('data-sidebar', 'collapsed');
+    else root.removeAttribute('data-sidebar');
+    const label = collapsed ? button.dataset.labelExpand : button.dataset.labelCollapse;
+    button.dataset.label = label;
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.querySelector('.sb-label').textContent = label;
+}
+
+function initSidebar() {
+    drawerToggle.addEventListener('click', () => (sidebar.classList.contains('is-open') ? closeDrawer() : openDrawer()));
+    sidebar.querySelector('.sb-close').addEventListener('click', () => closeDrawer({ restoreFocus: true }));
+    backdrop.addEventListener('click', () => closeDrawer({ restoreFocus: true }));
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && sidebar.classList.contains('is-open')) closeDrawer({ restoreFocus: true });
+    });
+    phoneLayout.addEventListener?.('change', (event) => { if (!event.matches) closeDrawer(); });
+
+    const collapse = document.querySelector('.sb-collapse');
+    setCollapsed(root.getAttribute('data-sidebar') === 'collapsed'); // theme.js applied the saved state
+    collapse.addEventListener('click', () => {
+        const collapsed = root.getAttribute('data-sidebar') !== 'collapsed';
+        setCollapsed(collapsed);
+        try { localStorage.setItem(STORE.sidebar, collapsed ? 'collapsed' : 'expanded'); } catch { /* session only */ }
     });
 }
+
+/* ------------------------------------------------------------------ header: language, theme */
 
 /** The switcher is a plain <details> with links; this only adds outside-click and Escape to close it. */
 function initLanguageMenu() {
@@ -145,13 +307,10 @@ function initLanguageMenu() {
     });
 }
 
-/* ------------------------------------------------------------------ theme */
-
-const THEME_KEY = 'railtime.theme';
-const THEME_COLOR = { light: '#172554', dark: '#0e131d' };
+const THEME_COLOR = { light: '#172554', dark: '#0d1320' };
 
 function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    root.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[theme]);
     const toggle = document.querySelector('.theme-toggle');
     if (toggle) {
@@ -163,9 +322,9 @@ function applyTheme(theme) {
 
 function initTheme() {
     // theme.js already set the initial theme before first paint; sync the button and meta tag to it.
-    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    applyTheme(root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
     document.querySelector('.theme-toggle')?.addEventListener('click', () => {
-        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         // Cross-fade the whole page between themes where supported (View Transitions API);
         // other browsers, and reduced-motion users, get the instant switch.
         if (document.startViewTransition && !prefersReducedMotion()) {
@@ -173,12 +332,12 @@ function initTheme() {
         } else {
             applyTheme(next);
         }
-        try { localStorage.setItem(THEME_KEY, next); } catch { /* storage unavailable: session-only */ }
+        try { localStorage.setItem(STORE.theme, next); } catch { /* storage unavailable: session-only */ }
     });
     // Follow OS changes until the user picks a theme explicitly.
     window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', (e) => {
         let saved = null;
-        try { saved = localStorage.getItem(THEME_KEY); } catch { /* ignore */ }
+        try { saved = localStorage.getItem(STORE.theme); } catch { /* ignore */ }
         if (!saved) applyTheme(e.matches ? 'dark' : 'light');
     });
 }
@@ -289,6 +448,35 @@ function collectPayload(form) {
     return payload;
 }
 
+/**
+ * Some browsers (for example Firefox on Windows) change a focused dropdown's value when you scroll
+ * the mouse wheel over it. Scrolling down then quietly walks the class to the last option (1A).
+ * Here the wheel always scrolls the page instead; the keyboard and the dropdown itself still work.
+ */
+function guardSelectsAgainstWheel(form) {
+    form.querySelectorAll('select').forEach((select) => {
+        select.addEventListener('wheel', (event) => {
+            if (document.activeElement !== select) return;
+            event.preventDefault();
+            const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+            window.scrollBy({ top: event.deltaY * unit, left: event.deltaX * unit, behavior: 'instant' });
+        }, { passive: false });
+    });
+}
+
+/** Opens the date/time picker on a click anywhere in the field, not only on its small icon. */
+function openPickersOnClick(form) {
+    form.querySelectorAll('input[type="date"], input[type="time"]').forEach((input) => {
+        input.addEventListener('click', () => {
+            try {
+                input.showPicker?.();
+            } catch {
+                /* already open, or not allowed here: the field still works by typing */
+            }
+        });
+    });
+}
+
 /* ------------------------------------------------------------------ API */
 
 /** A message for a failed API call: the API's own text on English pages, a translated one otherwise. */
@@ -320,7 +508,11 @@ async function requestJson(url, init) {
     } catch {
         /* non-JSON body — handled below */
     }
-    if (!response.ok) throw new Error(apiErrorMessage(data, response.status));
+    if (!response.ok) {
+        // Keep the server's per-field details so the form can mark the exact fields.
+        throw Object.assign(new Error(apiErrorMessage(data, response.status)),
+            { code: data?.error, details: Array.isArray(data?.details) ? data.details : [] });
+    }
     if (!data) throw new Error(t('err.empty'));
     return data;
 }
@@ -329,9 +521,7 @@ const postJson = (url, body) => requestJson(url, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 });
 
-/* ------------------------------------------------------------------ countdown */
-
-const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+/* ------------------------------------------------------------------ countdowns */
 
 /**
  * Calls onTick(remaining) right after each whole second of a countdown, so the digits change at an
@@ -352,43 +542,41 @@ function tickEverySecond(deadline, onTick, onDone) {
     return () => clearTimeout(timer);
 }
 
-function stopCountdown() {
-    countdown?.stop();
-    countdown = null;
+const countdowns = new Map(); // result region → stop()
+
+function stopCountdown(region) {
+    countdowns.get(region)?.();
+    countdowns.delete(region);
 }
 
-function renderCountdown(remaining) {
-    const units = countdown?.units;
-    if (!units) return;
-    units.days.textContent = pad2(Math.floor(remaining / MS.day));
-    units.hours.textContent = pad2(Math.floor((remaining % MS.day) / MS.hour));
-    units.minutes.textContent = pad2(Math.floor((remaining % MS.hour) / MS.minute));
-    units.seconds.textContent = pad2(Math.floor((remaining % MS.minute) / MS.second));
-}
-
-function startCountdown(container, millis, onDone) {
-    stopCountdown();
+/** Runs the 4-unit countdown inside a result card; anchored to the server's remaining millis. */
+function startCountdown(region, container, millis, onDone) {
+    stopCountdown(region);
     const units = {};
     container.querySelectorAll('[data-unit]').forEach((el) => { units[el.dataset.unit] = el; });
-    // Anchor to the server-computed remaining time, not to the browser's absolute clock.
-    countdown = { units };
-    const stop = tickEverySecond(Date.now() + millis, renderCountdown, () => {
-        countdown = null;
+    const render = (remaining) => {
+        units.days.textContent = pad2(Math.floor(remaining / MS.day));
+        units.hours.textContent = pad2(Math.floor((remaining % MS.day) / MS.hour));
+        units.minutes.textContent = pad2(Math.floor((remaining % MS.hour) / MS.minute));
+        units.seconds.textContent = pad2(Math.floor((remaining % MS.minute) / MS.second));
+    };
+    countdowns.set(region, tickEverySecond(Date.now() + millis, render, () => {
+        countdowns.delete(region);
         onDone();
-    });
-    if (countdown) countdown.stop = stop;
+    }));
 }
 
-/* ------------------------------------------------------------------ reminder (.ics) */
+/* ------------------------------------------------------------------ result actions: reminder, copy, share */
 
 const toIcsUtc = (date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 const escapeIcs = (text) => text.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, '\\n');
 
+/** Downloads an .ics calendar event for a general / Tatkal opening. */
 function downloadReminder(kind, data) {
     const start = new Date(data.bookingDateTime);
     const end = new Date(start.getTime() + REMINDER_DURATION_MINUTES * MS.minute);
     const opening = isoParts(data.bookingDateTime);
-    const journey = longDate(data.journeyDate ?? data.originDepartureDate);
+    const journey = longDate(data.journeyDate);
     const summary = kind === 'general'
         ? t('reminder.general', journey)
         : t('reminder.tatkal', data.travelClass, journey);
@@ -408,14 +596,94 @@ function downloadReminder(kind, data) {
         'END:VEVENT', 'END:VCALENDAR',
     ];
     const url = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' }));
-    const link = Object.assign(document.createElement('a'), { href: url, download: `railtime-${kind}-${data.bookingDate}.ics` });
+    const link = Object.assign(document.createElement('a'), { href: url, download: `railtime-${kind}-${opening.date}.ics` });
     document.body.append(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), MS.second);
 }
 
+/** Remembers a reminder for the Reminders page (this browser only). */
+function saveReminder(entry) {
+    const list = readStore(STORE.reminders, []).filter((r) => !(r.kind === entry.kind
+        && r.travelClass === entry.travelClass && r.journeyDate === entry.journeyDate));
+    list.push(entry);
+    list.sort((a, b) => Date.parse(a.bookingDateTime) - Date.parse(b.bookingDateTime));
+    writeStore(STORE.reminders, list.slice(-30));
+}
+
+async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        // Fallback for browsers / contexts without the async clipboard API.
+        const area = Object.assign(document.createElement('textarea'), { value: text });
+        area.setAttribute('readonly', '');
+        area.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+        document.body.append(area);
+        area.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch { ok = false; }
+        area.remove();
+        return ok;
+    }
+}
+
+/** Wires Add reminder / Copy / Share on a result card. */
+function wireActions(node, { text, reminder }) {
+    const feedback = node.querySelector('.r-feedback');
+    let clearTimer = null;
+    const say = (message, isError = false) => {
+        feedback.textContent = isError ? message : `✓ ${message}`;
+        feedback.classList.toggle('is-error', isError);
+        clearTimeout(clearTimer);
+        clearTimer = setTimeout(() => { feedback.textContent = ''; }, FEEDBACK_MS);
+    };
+    const fullText = () => `${text()}\n\n${t('copy.footer')}`;
+
+    const reminderButton = node.querySelector('[data-action="reminder"]');
+    reminderButton.hidden = !reminder;
+    if (reminder) {
+        reminderButton.addEventListener('click', () => {
+            reminder();
+            say(t('action.reminderAdded'));
+        });
+    }
+    node.querySelector('[data-action="copy"]').addEventListener('click', async () => {
+        if (await copyToClipboard(fullText())) say(t('action.copied'));
+        else say(t('action.copyFailed'), true);
+    });
+    node.querySelector('[data-action="share"]').addEventListener('click', async () => {
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: document.title, text: fullText(), url: window.location.href });
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return; // the user closed the share sheet
+            }
+        }
+        if (await copyToClipboard(`${fullText()}\n${window.location.href}`)) say(t('action.sharedCopied'));
+        else say(t('action.copyFailed'), true);
+    });
+}
+
 /* ------------------------------------------------------------------ rendering: shared */
+
+const resultRegion = (kind) => document.getElementById(`result-${kind}`);
+
+function newResult(kind) {
+    const node = cloneTemplate('tpl-result');
+    node.classList.add(`kind-${kind}`);
+    return node;
+}
+
+function addFact(node, term, value) {
+    const fact = cloneTemplate('tpl-fact');
+    slot(fact, 'term').textContent = term;
+    slot(fact, 'value').textContent = value;
+    slot(node, 'facts').append(fact);
+}
 
 /** Sets the pill, state class and banner of a result card from a view description. */
 function applyView(node, view, bannerText) {
@@ -432,18 +700,12 @@ function applyView(node, view, bannerText) {
     }
 }
 
-function fillNotes(node, notes) {
+function fillNotes(node, rule, notes) {
+    slot(node, 'rule-line').hidden = !rule;
+    slot(node, 'rule').textContent = rule ?? '';
     const list = slot(node, 'notes');
     list.replaceChildren(...notes.map((note) => Object.assign(document.createElement('li'), { textContent: note })));
-    list.closest('details').hidden = notes.length === 0;
-}
-
-function fillCalendarTile(node, iso) {
-    const date = parseIsoDate(iso);
-    slot(node, 'cal-month').textContent = FORMAT.monthShort.format(date);
-    slot(node, 'cal-day').textContent = String(date.getUTCDate());
-    slot(node, 'cal-year').textContent = String(date.getUTCFullYear());
-    slot(node, 'weekday').textContent = weekday(iso);
+    slot(node, 'notes-box').hidden = notes.length === 0;
 }
 
 /* ------------------------------------------------------------------ rendering: general / Tatkal */
@@ -470,45 +732,61 @@ function applyBookingStatus(node, status) {
     applyView(node, view, view.bannerText);
     slot(node, 'label').textContent = view.label;
     slot(node, 'countdown').hidden = status !== 'NOT_OPEN';
-    slot(node, 'actions').hidden = status !== 'NOT_OPEN';
+    node.querySelector('[data-action="reminder"]').hidden = status !== 'NOT_OPEN';
 }
 
 function renderBooking(kind, data) {
-    const node = cloneTemplate('tpl-result');
+    const region = resultRegion(kind);
+    const node = newResult(kind);
     const opening = isoParts(data.bookingDateTime);
     const journeyIso = data.journeyDate ?? data.originDepartureDate;
     const gap = daysBetween(opening.date, journeyIso);
+    const cls = kind === 'tatkal' ? className(data.travelClass, data.travelClassName) : null;
 
-    node.classList.add(`kind-${kind}`);
-    slot(node, 'kind').textContent = t(`kind.${kind}`);
-    fillCalendarTile(node, opening.date);
     slot(node, 'date').textContent = longDate(opening.date);
-    slot(node, 'time').textContent = timeWithZone(opening.time);
-    slot(node, 'tl-open').textContent = shortDate(opening.date);
-    slot(node, 'tl-journey').textContent = longDate(journeyIso);
-    slot(node, 'tl-gap').textContent = t(gap === 1 ? 'booking.gapOne' : 'booking.gapMany', gap);
-    if (kind === 'tatkal') {
-        const cls = slot(node, 'class');
-        cls.hidden = false;
-        cls.textContent = className(data.travelClass, data.travelClassName);
+    slot(node, 'time').textContent = `${timeWithZone(opening.time)} · ${weekday(opening.date)}`;
+    if (cls) {
+        slot(node, 'chip').hidden = false;
+        slot(node, 'chip').textContent = cls;
     }
+    addFact(node, t('result.departure'), `${longDate(journeyIso)} · ${weekday(journeyIso)}`);
+    addFact(node, t('result.daysBefore'), t(gap === 1 ? 'booking.gapOne' : 'booking.gapMany', gap));
+    slot(node, 'countdown-label').textContent = t('result.opensIn');
+
+    const reminderData = { kind, travelClass: data.travelClass, bookingDateTime: data.bookingDateTime, journeyDate: journeyIso };
+    wireActions(node, {
+        text: () => (kind === 'general'
+            ? t('copy.general', longDate(opening.date), timeWithZone(opening.time), longDate(journeyIso))
+            : t('copy.tatkal', longDate(opening.date), timeWithZone(opening.time), cls, longDate(journeyIso))),
+        reminder: () => {
+            downloadReminder(kind, reminderData);
+            saveReminder(reminderData);
+        },
+    });
     applyBookingStatus(node, data.status);
-    slot(node, 'reminder').addEventListener('click', () => downloadReminder(kind, data));
-    showResult(node);
+    showResult(region, node);
 
     if (data.status === 'NOT_OPEN' && data.millisUntilOpening > 0) {
         // Display-only transition when the countdown ends; the server remains authoritative.
-        startCountdown(slot(node, 'countdown'), data.millisUntilOpening, () => applyBookingStatus(node, 'OPEN'));
+        startCountdown(region, slot(node, 'countdown'), data.millisUntilOpening, () => applyBookingStatus(node, 'OPEN'));
     }
+    return { opening: data.bookingDateTime, travelClass: data.travelClass };
 }
 
 function renderNotApplicable(data) {
-    const node = cloneTemplate('tpl-not-applicable');
-    slot(node, 'code').textContent = data.travelClass;
-    slot(node, 'class').textContent = className(data.travelClass, data.travelClassName);
-    slot(node, 'message').textContent = t('tatkal.notListed', data.travelClass);
-    slot(node, 'origin').textContent = longDate(data.originDepartureDate);
-    showResult(node);
+    const node = newResult('tatkal');
+    const cls = className(data.travelClass, data.travelClassName);
+    const message = t('tatkal.notListed', data.travelClass);
+    slot(node, 'label').textContent = t('kind.tatkal');
+    applyView(node, { pill: t('result.verify'), pillClass: 'pill-neutral' });
+    slot(node, 'date').textContent = cls;
+    slot(node, 'date').classList.add('is-text');
+    slot(node, 'time-chip').hidden = true;
+    addFact(node, t('result.departure'), longDate(data.originDepartureDate));
+    fillNotes(node, message, []);
+    wireActions(node, { text: () => `${cls}\n${message}` });
+    showResult(resultRegion('tatkal'), node);
+    return null;
 }
 
 /* ------------------------------------------------------------------ rendering: refund */
@@ -558,21 +836,27 @@ function refundNotes(data) {
 }
 
 function renderRefund(data) {
-    const node = cloneTemplate('tpl-refund');
+    const node = newResult('refund');
     const fare = Number(data.totalFare);
     const percent = fare > 0 ? Math.round((Number(data.totalRefund) / fare) * 100) : 0;
     const perPassenger = data.passengers > 1 ? ` × ${data.passengers}` : '';
-
-    slot(node, 'percent').textContent = `${percent}%`;
-    slot(node, 'class-name').textContent = className(data.travelClass, data.travelClassName);
-    const pill = slot(node, 'pill');
-    pill.textContent = refundPill(data);
-    pill.className = `status-pill ${data.refundable ? 'pill-open' : 'pill-none'}`;
-    slot(node, 'refund-big').textContent = money(data.totalRefund);
-    slot(node, 'lead').textContent = leadTime(data.minutesBeforeDeparture);
-    slot(node, 'ticket').textContent = `${t(`status.${data.ticketStatus}`)} · `
+    const cls = className(data.travelClass, data.travelClassName);
+    const ticket = `${t(`status.${data.ticketStatus}`)} · `
         + t(data.passengers === 1 ? 'refund.passengersOne' : 'refund.passengersMany', data.passengers);
+    const rule = refundRule(data);
 
+    slot(node, 'label').textContent = t('result.estimatedRefund');
+    applyView(node, { pill: refundPill(data), pillClass: data.refundable ? 'pill-open' : 'pill-none' });
+    slot(node, 'date').textContent = money(data.totalRefund);
+    slot(node, 'date').classList.add('is-amount');
+    slot(node, 'time').textContent = leadTime(data.minutesBeforeDeparture);
+    slot(node, 'chip').hidden = false;
+    slot(node, 'chip').textContent = ticket;
+    addFact(node, t('result.refunded'), t('result.ofFare', percent));
+    addFact(node, t('result.class'), cls);
+
+    const breakdown = slot(node, 'breakdown');
+    breakdown.hidden = false;
     slot(node, 'fare').textContent = money(data.totalFare);
     slot(node, 'charge').textContent = `− ${money(data.totalCharge)}`;
     slot(node, 'charge-note').textContent = data.refundable
@@ -584,10 +868,11 @@ function renderRefund(data) {
         slot(node, 'gst-note').textContent = t('refund.gstNote', data.gstRatePercent);
     }
     slot(node, 'refund').textContent = money(data.totalRefund);
-    slot(node, 'rule').textContent = refundRule(data);
-    fillNotes(node, refundNotes(data));
+    fillNotes(node, rule, refundNotes(data));
     if (!data.refundable) node.classList.add('is-none');
-    showResult(node);
+    wireActions(node, { text: () => t('copy.refund', money(data.totalRefund), money(data.totalFare), rule, cls, ticket) });
+    showResult(resultRegion('refund'), node);
+    return { refund: data.totalRefund };
 }
 
 /* ------------------------------------------------------------------ rendering: chart */
@@ -620,101 +905,54 @@ function chartNotes(departureDate) {
 }
 
 function renderChart(data) {
-    const node = cloneTemplate('tpl-chart');
+    const region = resultRegion('chart');
+    const node = newResult('chart');
     const first = isoParts(data.firstChartAt);
     const final = isoParts(data.finalChartAt);
     const dep = isoParts(data.departureDateTime);
     const hoursBefore = Math.round((Date.parse(data.departureDateTime) - Date.parse(data.firstChartAt)) / MS.hour);
 
-    fillCalendarTile(node, first.date);
+    slot(node, 'label').textContent = t('result.firstChart');
     slot(node, 'date').textContent = longDate(first.date);
-    slot(node, 'time').textContent = timeWithZone(first.time);
-    slot(node, 'rule-chip').textContent = data.rule === 'PREVIOUS_EVENING'
+    slot(node, 'time').textContent = `${timeWithZone(first.time)} · ${weekday(first.date)}`;
+    slot(node, 'chip').hidden = false;
+    slot(node, 'chip').textContent = data.rule === 'PREVIOUS_EVENING'
         ? t('chart.rulePreviousEvening') : t('chart.ruleHours', hoursBefore);
-    slot(node, 'tl-first').textContent = shortDate(first.date);
-    slot(node, 'tl-first-time').textContent = time12(first.time);
-    slot(node, 'tl-final').textContent = shortDate(final.date);
-    slot(node, 'tl-final-time').textContent = time12(final.time);
-    slot(node, 'tl-dep').textContent = shortDate(dep.date);
-    slot(node, 'tl-dep-time').textContent = time12(dep.time);
-    fillNotes(node, chartNotes(dep.date));
+    addFact(node, t('chart.final'), `${shortDate(final.date)} · ${time12(final.time)}`);
+    addFact(node, t('result.departure'), `${shortDate(dep.date)} · ${time12(dep.time)}`);
+    slot(node, 'countdown-label').textContent = t('result.firstChartIn');
+    fillNotes(node, null, chartNotes(dep.date));
+    wireActions(node, {
+        text: () => t('copy.chart', longDate(first.date), timeWithZone(first.time),
+            `${longDate(final.date)}, ${timeWithZone(final.time)}`, `${longDate(dep.date)}, ${timeWithZone(dep.time)}`),
+    });
     applyChartStatus(node, data.status, data);
-    showResult(node);
+    showResult(region, node);
 
     if (data.status === 'PENDING' && data.millisUntilFirstChart > 0) {
-        startCountdown(slot(node, 'countdown'), data.millisUntilFirstChart,
+        startCountdown(region, slot(node, 'countdown'), data.millisUntilFirstChart,
             () => applyChartStatus(node, 'FIRST_CHART_PREPARED', data));
     }
+    return { firstChartAt: data.firstChartAt };
 }
 
-/* ------------------------------------------------------------------ today's booking windows */
-
-const TODAY_REFRESH_MS = 30 * MS.minute;
-let todayStop = null;
-let todayRefresh = null;
-
-function renderToday(section, data) {
-    const set = (name, text) => { slot(section, name).textContent = text; };
-    const opensAt = isoParts(data.nextOpening.opensAt);
-    set('latest', mediumDate(data.latestBookableJourneyDate));
-    set('next', mediumDate(data.nextOpening.journeyDate));
-    set('next-when', t(opensAt.date === isoParts(data.asOf).date ? 'today.today' : 'today.tomorrow',
-        timeWithZone(opensAt.time)));
-    set('tatkal', mediumDate(data.tatkal.journeyDate));
-    const pill = (name, key, open, opensAtIso) => {
-        const el = slot(section, name);
-        el.textContent = t(key, open ? t('today.open') : time12(isoParts(opensAtIso).time));
-        el.classList.toggle('is-open', open);
-    };
-    pill('ac', 'today.ac', data.tatkal.acOpen, data.tatkal.acOpensAt);
-    pill('nonac', 'today.nonAc', data.tatkal.nonAcOpen, data.tatkal.nonAcOpensAt);
-
-    // Every deadline is measured against the server's "asOf", so the browser clock cannot skew it.
-    const asOf = Date.parse(data.asOf);
-    const anchor = Date.now();
-    const deadlines = [data.nextOpening.millisUntilOpening, Date.parse(data.tatkal.acOpensAt) - asOf,
-        Date.parse(data.tatkal.nonAcOpensAt) - asOf].filter((ms) => ms > 0);
-    const refreshIn = Math.min(TODAY_REFRESH_MS, ...deadlines.map((ms) => ms + MS.second));
-    const count = slot(section, 'next-count');
-
-    todayStop?.();
-    todayStop = tickEverySecond(anchor + data.nextOpening.millisUntilOpening, (remaining) => {
-        count.textContent = t('today.in', `${pad2(Math.floor(remaining / MS.hour))}:`
-            + `${pad2(Math.floor((remaining % MS.hour) / MS.minute))}:${pad2(Math.floor((remaining % MS.minute) / MS.second))}`);
-    }, () => { count.textContent = ''; });
-    clearTimeout(todayRefresh);
-    todayRefresh = setTimeout(() => loadToday(section), refreshIn);
-}
-
-/** The strip is rendered by the server; this only adds the live countdown and refreshes it when a window opens. */
-async function loadToday(section) {
-    try {
-        renderToday(section, await requestJson(section.dataset.endpoint));
-    } catch {
-        // Keep the server-rendered values; just stop the live parts and try again later.
-        todayStop?.();
-        slot(section, 'next-count').textContent = '';
-        clearTimeout(todayRefresh);
-        todayRefresh = setTimeout(() => loadToday(section), TODAY_REFRESH_MS);
-    }
-}
-
-/* ------------------------------------------------------------------ errors and scrolling */
-
-function renderError(message) {
+function renderError(kind, message) {
     const node = cloneTemplate('tpl-error');
     slot(node, 'message').textContent = message;
-    showResult(node);
+    showResult(resultRegion(kind), node);
 }
 
-let pendingResize = null; // { from, to } heights of the last swap, until presentResult() runs
+/* ------------------------------------------------------------------ showing results */
+
+const pendingResize = new Map(); // region → { from, to } until presentResult() runs
 
 /** Swaps in the new result card; presentResult() then decides how to bring it into view. */
-function showResult(node) {
-    const from = resultRegion.getBoundingClientRect().height;
-    resultRegion.getAnimations().forEach((animation) => animation.cancel());
-    resultRegion.replaceChildren(node);
-    pendingResize = { from, to: resultRegion.getBoundingClientRect().height };
+function showResult(region, node) {
+    const from = region.getBoundingClientRect().height;
+    region.getAnimations().forEach((animation) => animation.cancel());
+    stopCountdown(region);
+    region.replaceChildren(node);
+    pendingResize.set(region, { from, to: region.getBoundingClientRect().height });
 }
 
 /**
@@ -722,11 +960,11 @@ function showResult(node) {
  * Only used when the page doesn't scroll: while it runs the page is shorter than its final length,
  * which would make a scroll to the result stop short.
  */
-function animateResultHeight({ from, to }) {
-    if (Math.abs(to - from) < 2 || prefersReducedMotion() || !resultRegion.animate) return;
-    resultRegion.animate(
+function animateResultHeight(region, { from, to }) {
+    if (Math.abs(to - from) < 2 || prefersReducedMotion() || !region.animate) return;
+    region.animate(
         [{ height: `${from}px`, overflow: 'hidden' }, { height: `${to}px`, overflow: 'hidden' }],
-        { duration: 320, easing: 'cubic-bezier(.2, .7, .2, 1)' },
+        { duration: 300, easing: 'cubic-bezier(.2, .7, .2, 1)' },
     );
 }
 
@@ -735,9 +973,9 @@ function animateResultHeight({ from, to }) {
  * is taller than that space, starting just below the header). Returns false when it is already
  * fully visible, so the page doesn't move needlessly.
  */
-function scrollResultIntoView() {
-    const header = document.querySelector('.site-header')?.getBoundingClientRect().height ?? 0;
-    const rect = resultRegion.getBoundingClientRect(); // final layout: no height animation is running
+function scrollResultIntoView(region) {
+    const header = document.querySelector('.app-header')?.getBoundingClientRect().height ?? 0;
+    const rect = region.getBoundingClientRect(); // final layout: no height animation is running
     const available = window.innerHeight - header;
     const margin = 16;
     if (rect.top >= header + margin && rect.bottom <= window.innerHeight - margin) return false;
@@ -750,14 +988,14 @@ function scrollResultIntoView() {
 }
 
 /** Brings a new result into view: one smooth scroll when needed, otherwise a smooth resize in place. */
-function presentResult({ reveal }) {
-    const resize = pendingResize;
-    pendingResize = null;
-    if (reveal && scrollResultIntoView()) return;
-    if (resize) animateResultHeight(resize);
+function presentResult(region, { reveal }) {
+    const resize = pendingResize.get(region);
+    pendingResize.delete(region);
+    if (reveal && scrollResultIntoView(region)) return;
+    if (resize) animateResultHeight(region, resize);
 }
 
-/* ------------------------------------------------------------------ wiring */
+/* ------------------------------------------------------------------ calculating */
 
 let lastCalculatedForm = null;
 
@@ -768,28 +1006,48 @@ async function calculate(form, { reveal = true } = {}) {
     if (!payload) return;
 
     const kind = form.dataset.kind;
+    const region = resultRegion(kind);
     const button = form.querySelector('button[type="submit"]');
-    stopCountdown();
-    // The spinner replaces the old "Calculating…" label swap, which flickered on fast responses.
+    // The spinner replaces a "Calculating…" label swap, which flickered on fast responses.
     form.classList.add('is-loading');
     form.setAttribute('aria-busy', 'true');
     button.setAttribute('aria-disabled', 'true');
 
     try {
         const [data] = await Promise.all([postJson(form.dataset.endpoint, payload), delay(MIN_LOADING_MS)]);
-        if (kind === 'refund') renderRefund(data);
-        else if (kind === 'chart') renderChart(data);
-        else if (data.status === 'NOT_APPLICABLE') renderNotApplicable(data);
-        else renderBooking(kind, data);
+        let summary;
+        if (kind === 'refund') summary = renderRefund(data);
+        else if (kind === 'chart') summary = renderChart(data);
+        else if (data.status === 'NOT_APPLICABLE') summary = renderNotApplicable(data);
+        else summary = renderBooking(kind, data);
         lastCalculatedForm = form.id;
+        if (summary) recordRecent(kind, payload, summary);
+        if (currentPage === 'dashboard') setTimeout(() => loadUsage({ force: true }), 400); // counted after the response
     } catch (err) {
-        renderError(err.message);
+        renderError(kind, err.message);
+        markServerFieldErrors(form, err);
     } finally {
         form.classList.remove('is-loading');
         form.removeAttribute('aria-busy');
         button.removeAttribute('aria-disabled');
-        presentResult({ reveal });
+        presentResult(region, { reveal });
     }
+}
+
+/**
+ * Shows the server's per-field problems next to the matching inputs. English pages show the
+ * server's own words; other languages show the translated message for the error code.
+ */
+function markServerFieldErrors(form, err) {
+    let first = null;
+    for (const { field, message } of err.details ?? []) {
+        const input = form.elements[field];
+        if (!(input instanceof Element)) continue;
+        setFieldError(input, PAGE.lang === API_LANGUAGE ? message
+            : t(hasMessage(`err.${err.code}`) ? `err.${err.code}` : 'err.generic'));
+        first ??= input;
+    }
+    first?.focus({ preventScroll: true });
 }
 
 function handleSubmit(event) {
@@ -797,72 +1055,264 @@ function handleSubmit(event) {
     calculate(event.currentTarget);
 }
 
-/* ------------------------------------------------------------------ field behaviour */
-
-/**
- * Some browsers (for example Firefox on Windows) change a focused dropdown's value when you scroll
- * the mouse wheel over it. Scrolling down then quietly walks the class to the last option (1A).
- * Here the wheel always scrolls the page instead; the keyboard and the dropdown itself still work.
- */
-function guardSelectsAgainstWheel(form) {
-    form.querySelectorAll('select').forEach((select) => {
-        select.addEventListener('wheel', (event) => {
-            if (document.activeElement !== select) return;
-            event.preventDefault();
-            const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-            window.scrollBy({ top: event.deltaY * unit, left: event.deltaX * unit, behavior: 'instant' });
-        }, { passive: false });
-    });
-}
-
-/** Opens the date/time picker on a click anywhere in the field, not only on its small icon. */
-function openPickersOnClick(form) {
-    form.querySelectorAll('input[type="date"], input[type="time"]').forEach((input) => {
-        input.addEventListener('click', () => {
-            try {
-                input.showPicker?.();
-            } catch {
-                /* already open, or not allowed here: the field still works by typing */
-            }
+/** Reset clears the fields and their messages; the last result stays until the next calculation. */
+function handleReset(event) {
+    const form = event.currentTarget;
+    setTimeout(() => {
+        form.querySelectorAll('input, select').forEach((field) => {
+            setFieldError(field, null);
+            if (field.type === 'date') updateDateDisplay(field);
         });
     });
 }
 
-/* ------------------------------------------------------------------ language switch continuity */
+/* ------------------------------------------------------------------ recent calculations (dashboard) */
 
-// Switching language reloads the page. To make it feel seamless, the page keeps your place (via the
-// URL fragment of the section in view), keeps what you typed, and re-runs your last calculation.
-const CARRY_KEY = 'railtime.carry';
-const SECTION_ANCHORS = ['top', 'calculators', 'planning', 'result', 'info'];
-
-function sectionInView() {
-    let current = 'top';
-    for (const id of SECTION_ANCHORS) {
-        const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top <= window.innerHeight * 0.4) current = id;
-    }
-    return current;
+function recordRecent(kind, payload, summary) {
+    const entry = { kind, payload, summary, at: Date.now() };
+    const key = JSON.stringify([kind, payload]);
+    const list = readStore(STORE.recent, []).filter((item) => JSON.stringify([item.kind, item.payload]) !== key);
+    list.unshift(entry);
+    writeStore(STORE.recent, list.slice(0, RECENT_LIMIT));
 }
 
-function carryStateAcross(link) {
+function recentText({ kind, payload, summary }) {
+    const opening = (iso) => { const p = isoParts(iso); return `${shortDate(p.date)} · ${time12(p.time)}`; };
+    switch (kind) {
+        case 'general':
+            return { sub: longDate(payload.originDepartureDate), result: t('recent.opens', opening(summary.opening)) };
+        case 'tatkal':
+            return { sub: `${mediumDate(payload.originDepartureDate)} · ${payload.travelClass}`, result: t('recent.opens', opening(summary.opening)) };
+        case 'refund':
+            return { sub: `${payload.travelClass} · ${t(`status.${payload.ticketStatus}`)} · ${money(payload.totalFare)}`, result: t('recent.refund', money(summary.refund)) };
+        default:
+            return { sub: `${mediumDate(payload.departureDate)} · ${time12(payload.departureTime)}`, result: t('recent.firstChart', opening(summary.firstChartAt)) };
+    }
+}
+
+function renderRecent() {
+    const section = document.querySelector('.recent');
+    const list = readStore(STORE.recent, []).filter((item) => CALCULATORS.includes(item.kind) && item.payload && item.summary);
+    section.hidden = list.length === 0;
+    section.querySelector('.recent-list').replaceChildren(...list.map((item) => {
+        const li = cloneTemplate('tpl-recent-item');
+        const link = slot(li, 'link');
+        const texts = recentText(item);
+        link.classList.add(`kind-${item.kind}`);
+        link.href = pathOf(item.kind);
+        slot(li, 'icon').setAttribute('href', sidebarLink(item.kind).querySelector('use').getAttribute('href'));
+        slot(li, 'title').textContent = sidebarLink(item.kind).dataset.label;
+        slot(li, 'sub').textContent = texts.sub;
+        slot(li, 'result').textContent = texts.result;
+        link.addEventListener('click', (event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            rerun(item);
+        });
+        return li;
+    }));
+}
+
+/** Opens the calculator, fills in the saved inputs and calculates again (times are relative to now). */
+function rerun(item) {
+    navigate(item.kind);
+    const form = document.getElementById(`${item.kind}-form`);
+    for (const [name, value] of Object.entries(item.payload)) {
+        const field = form.elements[name];
+        if (!field) continue;
+        field.value = value;
+        if (field.type === 'date') updateDateDisplay(field);
+    }
+    calculate(form);
+}
+
+function initRecent() {
+    document.querySelector('[data-action="clear-recent"]').addEventListener('click', () => {
+        writeStore(STORE.recent, []);
+        renderRecent();
+    });
+    renderRecent();
+}
+
+/* ------------------------------------------------------------------ reminders page */
+
+function renderReminders() {
+    const reminders = readStore(STORE.reminders, []).filter((r) => r.bookingDateTime && r.journeyDate);
+    const list = document.querySelector('.reminder-list');
+    list.hidden = reminders.length === 0;
+    slot(document, 'reminders-empty').hidden = reminders.length > 0;
+    list.replaceChildren(...reminders.map((reminder) => {
+        const li = cloneTemplate('tpl-reminder-item');
+        const opening = isoParts(reminder.bookingDateTime);
+        const passed = Date.parse(reminder.bookingDateTime) <= Date.now();
+        li.classList.add(`kind-${reminder.kind}`);
+        slot(li, 'title').textContent = reminder.kind === 'general'
+            ? t('reminders.titleGeneral') : t('reminders.titleTatkal', className(reminder.travelClass));
+        slot(li, 'sub').textContent = t('reminders.sub', `${shortDate(opening.date)} · ${timeWithZone(opening.time)}`,
+            mediumDate(reminder.journeyDate));
+        const state = slot(li, 'state');
+        state.textContent = t(passed ? 'reminders.passed' : 'reminders.upcoming');
+        state.classList.add(passed ? 'pill-passed' : 'pill-neutral');
+        li.querySelector('[data-action="download"]').addEventListener('click', () => downloadReminder(reminder.kind, reminder));
+        li.querySelector('[data-action="remove"]').addEventListener('click', () => {
+            const same = (r) => r.kind === reminder.kind && r.travelClass === reminder.travelClass
+                && r.journeyDate === reminder.journeyDate && r.bookingDateTime === reminder.bookingDateTime;
+            writeStore(STORE.reminders, readStore(STORE.reminders, []).filter((r) => !same(r)));
+            renderReminders();
+        });
+        return li;
+    }));
+}
+
+/* ------------------------------------------------------------------ live booking windows (dashboard, status) */
+
+const TODAY_REFRESH_MS = 30 * MS.minute;
+let todayStop = null;
+let todayRefresh = null;
+
+function setToday(name, text, open) {
+    document.querySelectorAll(`[data-today="${name}"]`).forEach((el) => {
+        el.textContent = text;
+        if (open !== undefined) el.classList.toggle('is-open', open);
+    });
+}
+
+function renderToday(data) {
+    const opensAt = isoParts(data.nextOpening.opensAt);
+    setToday('latest', mediumDate(data.latestBookableJourneyDate));
+    setToday('next', mediumDate(data.nextOpening.journeyDate));
+    setToday('next-time', timeWithZone(opensAt.time));
+    setToday('next-day', t(opensAt.date === isoParts(data.asOf).date ? 'today.today' : 'today.tomorrow'));
+    setToday('tatkal', mediumDate(data.tatkal.journeyDate));
+    const tatkalPill = (name, key, open, opensAtIso) =>
+        setToday(name, t(key, open ? t('today.open') : time12(isoParts(opensAtIso).time)), open);
+    tatkalPill('ac', 'today.ac', data.tatkal.acOpen, data.tatkal.acOpensAt);
+    tatkalPill('nonac', 'today.nonAc', data.tatkal.nonAcOpen, data.tatkal.nonAcOpensAt);
+
+    // Every deadline is measured against the server's "asOf", so the browser clock cannot skew it.
+    const asOf = Date.parse(data.asOf);
+    const anchor = Date.now();
+    const deadlines = [data.nextOpening.millisUntilOpening, Date.parse(data.tatkal.acOpensAt) - asOf,
+        Date.parse(data.tatkal.nonAcOpensAt) - asOf].filter((ms) => ms > 0);
+    const refreshIn = Math.min(TODAY_REFRESH_MS, ...deadlines.map((ms) => ms + MS.second));
+
+    todayStop?.();
+    todayStop = tickEverySecond(anchor + data.nextOpening.millisUntilOpening,
+        (remaining) => setToday('opens-in', t('today.opensIn', duration(remaining))),
+        () => setToday('opens-in', ''));
+    clearTimeout(todayRefresh);
+    todayRefresh = setTimeout(loadToday, refreshIn);
+}
+
+/** The booking windows are rendered by the server; this adds the live countdown and refreshes them. */
+async function loadToday() {
+    const endpoint = document.body.dataset.windowEndpoint ?? '/api/v1/booking/window';
+    try {
+        renderToday(await requestJson(endpoint));
+    } catch {
+        // Keep the server-rendered values; just stop the live parts and try again later.
+        todayStop?.();
+        setToday('opens-in', '');
+        clearTimeout(todayRefresh);
+        todayRefresh = setTimeout(loadToday, TODAY_REFRESH_MS);
+    }
+}
+
+/* ------------------------------------------------------------------ usage & traffic (dashboard) */
+
+const USAGE_REFRESH_MS = 30 * MS.second;
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const integer = new Intl.NumberFormat(PAGE.locale);
+let usageLoadedAt = 0;
+
+function svgEl(name, attributes) {
+    const el = document.createElementNS(SVG_NS, name);
+    Object.entries(attributes).forEach(([key, value]) => el.setAttribute(key, value));
+    return el;
+}
+
+/** A minimal two-series line chart (visits with a soft area, calculations as a thin line). */
+function drawUsageChart(svg, daily) {
+    const width = 600;
+    const height = 120;
+    const pad = 6;
+    const max = Math.max(1, ...daily.map((d) => Math.max(d.visits, d.calculations)));
+    const x = (i) => (daily.length === 1 ? width / 2 : (i / (daily.length - 1)) * width);
+    const y = (v) => height - pad - (v / max) * (height - 2 * pad);
+    const line = (key) => daily.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join('');
+
+    const frame = [
+        ...[0.5, 1].map((f) => svgEl('line', { x1: 0, x2: width, y1: y(max * f), y2: y(max * f), class: 'uc-grid' })),
+        svgEl('line', { x1: 0, x2: width, y1: height - pad, y2: height - pad, class: 'uc-base' }),
+    ];
+    if (daily.length === 1) {
+        // Counting started today: one point per series, no invented history.
+        const d = daily[0];
+        svg.replaceChildren(...frame,
+            // Zero-length round-capped lines stay round even though the chart stretches horizontally.
+            svgEl('line', { x1: x(0), x2: x(0), y1: y(d.visits), y2: y(d.visits), class: 'uc-dot-visits' }),
+            svgEl('line', { x1: x(0), x2: x(0), y1: y(d.calculations), y2: y(d.calculations), class: 'uc-dot-calcs' }));
+    } else {
+        svg.replaceChildren(...frame,
+            svgEl('path', { d: `${line('visits')}L${width},${height - pad}L0,${height - pad}Z`, class: 'uc-area' }),
+            svgEl('path', { d: line('visits'), class: 'uc-line-visits' }),
+            svgEl('path', { d: line('calculations'), class: 'uc-line-calcs' }));
+    }
+    const total = daily.reduce((sum, d) => sum + d.visits, 0);
+    const peak = daily.reduce((best, d) => (d.visits > best.visits ? d : best), daily[0]);
+    svg.setAttribute('aria-label', t('usage.chartLabel', integer.format(total), integer.format(peak.visits), mediumDate(peak.date)));
+}
+
+function renderUsage(section, data) {
+    const set = (name, value) => { section.querySelector(`[data-usage="${name}"]`).textContent = value; };
+    const since = isoParts(data.since);
+    set('since', t('usage.since', `${mediumDate(since.date)} · ${timeWithZone(since.time)}`));
+    set('visits-total', integer.format(data.visits.total));
+    set('visits-today', integer.format(data.visits.today));
+    set('visits-week', integer.format(data.visits.thisWeek));
+    set('visits-month', integer.format(data.visits.thisMonth));
+    set('calc-total', integer.format(data.calculations.total));
+    set('calc-general', integer.format(data.calculations.general));
+    set('calc-tatkal', integer.format(data.calculations.tatkal));
+    set('calc-refund', integer.format(data.calculations.refund));
+    set('calc-chart', integer.format(data.calculations.chart));
+    set('first-day', shortDate(data.daily[0].date));
+    set('last-day', data.daily.length > 1 ? shortDate(data.daily[data.daily.length - 1].date) : '');
+    drawUsageChart(section.querySelector('[data-usage="chart"]'), data.daily);
+}
+
+/** Loads the counts when the dashboard is shown (at most every 30 s); hides the section if unavailable. */
+async function loadUsage({ force = false } = {}) {
+    const section = document.querySelector('.usage');
+    if (!section || (!force && Date.now() - usageLoadedAt < USAGE_REFRESH_MS)) return;
+    usageLoadedAt = Date.now();
+    try {
+        renderUsage(section, await requestJson(section.dataset.endpoint));
+        section.hidden = false;
+    } catch {
+        section.hidden = true; // informational only
+    }
+}
+
+/* ------------------------------------------------------------------ language switch continuity */
+
+// Switching language reloads the page (on the same page). To make it feel seamless, the page keeps
+// what you typed and re-runs your last calculation.
+function carryStateAcross() {
     const values = {};
     document.querySelectorAll('.calc-form input, .calc-form select').forEach((field) => {
         if (field.id && field.value) values[field.id] = field.value;
     });
     try {
-        sessionStorage.setItem(CARRY_KEY, JSON.stringify({ values, last: lastCalculatedForm }));
+        sessionStorage.setItem(STORE.carry, JSON.stringify({ values, last: lastCalculatedForm }));
     } catch { /* storage unavailable: switch without carrying state */ }
-    const url = new URL(link.href, window.location.href);
-    const section = sectionInView();
-    url.hash = section === 'top' ? '' : section;
-    link.href = url.toString();
 }
 
 function restoreCarriedState() {
     let carried = null;
     try {
-        carried = JSON.parse(sessionStorage.getItem(CARRY_KEY));
-        sessionStorage.removeItem(CARRY_KEY);
+        carried = JSON.parse(sessionStorage.getItem(STORE.carry));
+        sessionStorage.removeItem(STORE.carry);
     } catch { /* nothing to restore */ }
     if (!carried) return;
     for (const [id, value] of Object.entries(carried.values ?? {})) {
@@ -878,19 +1328,23 @@ function restoreCarriedState() {
 function initLanguageContinuity() {
     document.querySelectorAll('.lang-option').forEach((link) => {
         if (link.getAttribute('aria-current') === 'true') return;
-        link.addEventListener('click', () => carryStateAcross(link));
+        link.addEventListener('click', carryStateAcross);
     });
     restoreCarriedState();
 }
 
+/* ------------------------------------------------------------------ start */
+
 function init() {
     initTheme();
-    initMenu();
+    initSidebar();
+    initRouter();
     initLanguageMenu();
-    const today = document.getElementById('today');
-    if (today) loadToday(today);
+    initRecent();
+    loadToday();
     document.querySelectorAll('.calc-form').forEach((form) => {
         form.addEventListener('submit', handleSubmit);
+        form.addEventListener('reset', handleReset);
         guardSelectsAgainstWheel(form);
         openPickersOnClick(form);
         form.querySelectorAll('input, select').forEach((field) => {

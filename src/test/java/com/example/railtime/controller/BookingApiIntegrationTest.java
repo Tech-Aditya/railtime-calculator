@@ -201,39 +201,71 @@ class BookingApiIntegrationTest {
     class Protocol {
 
         @Test
-        void malformedJson() throws Exception {
+        void malformedJsonSaysWhere() throws Exception {
+            postJson(GENERAL, "{\"originDepartureDate\": 2026-12}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("MALFORMED_REQUEST"))
+                    .andExpect(jsonPath("$.message").value(startsWith("Request body is not valid JSON (problem at line 1, column")))
+                    .andExpect(jsonPath("$.requestId").value(org.hamcrest.Matchers.matchesPattern("[0-9a-f]{8}")));
+        }
+
+        @Test
+        void truncatedJson() throws Exception {
             postJson(GENERAL, "{\"originDepartureDate\":")
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.error").value("MALFORMED_REQUEST"))
-                    .andExpect(jsonPath("$.message").value("Request body is missing or is not valid JSON"));
+                    .andExpect(jsonPath("$.message").value(startsWith("Request body is not valid JSON")));
         }
 
         @Test
         void missingBody() throws Exception {
             mvc.perform(post(GENERAL).contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error").value("MALFORMED_REQUEST"));
+                    .andExpect(jsonPath("$.error").value("MALFORMED_REQUEST"))
+                    .andExpect(jsonPath("$.message").value("Request body is missing. Send a JSON object with the required fields."));
         }
 
         @Test
-        void unsupportedContentType() throws Exception {
+        void bodyThatIsNotAnObject() throws Exception {
+            postJson(GENERAL, "[\"2026-12-20\"]")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("MALFORMED_REQUEST"))
+                    .andExpect(jsonPath("$.message").value(startsWith("Request body must be a JSON object")));
+        }
+
+        @Test
+        void unsupportedContentTypeNamesTheFix() throws Exception {
             mvc.perform(post(GENERAL).contentType(MediaType.TEXT_PLAIN).content("2026-12-20"))
                     .andExpect(status().isUnsupportedMediaType())
-                    .andExpect(jsonPath("$.error").value("UNSUPPORTED_MEDIA_TYPE"));
+                    .andExpect(jsonPath("$.error").value("UNSUPPORTED_MEDIA_TYPE"))
+                    .andExpect(jsonPath("$.message").value(
+                            "Content-Type 'text/plain' is not supported. Send JSON with 'Content-Type: application/json'."));
         }
 
         @Test
-        void wrongMethod() throws Exception {
+        void wrongMethodNamesTheRightOne() throws Exception {
             mvc.perform(get(GENERAL))
                     .andExpect(status().isMethodNotAllowed())
-                    .andExpect(jsonPath("$.error").value("METHOD_NOT_ALLOWED"));
+                    .andExpect(header().string(HttpHeaders.ALLOW, "POST"))
+                    .andExpect(jsonPath("$.error").value("METHOD_NOT_ALLOWED"))
+                    .andExpect(jsonPath("$.message").value("HTTP method GET is not supported for this endpoint. Use POST."));
+        }
+
+        @Test
+        void clientThatDoesNotAcceptJson() throws Exception {
+            mvc.perform(post(GENERAL).contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_XML)
+                            .content("{\"originDepartureDate\":\"2026-12-20\"}"))
+                    .andExpect(status().isNotAcceptable())
+                    .andExpect(jsonPath("$.error").value("NOT_ACCEPTABLE"))
+                    .andExpect(jsonPath("$.message").value(startsWith("This API only returns JSON")));
         }
 
         @Test
         void unknownApiPath() throws Exception {
             mvc.perform(get("/api/v1/booking/unknown"))
                     .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+                    .andExpect(jsonPath("$.error").value("NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value("No API endpoint exists at this path"));
         }
 
         @Test

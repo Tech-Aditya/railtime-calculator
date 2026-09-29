@@ -16,6 +16,7 @@ public class OpenApiConfig {
     public static final String TAG_BOOKING = "Booking calculator";
     public static final String TAG_HEALTH = "Health";
     public static final String TAG_PLANNING = "Journey planning";
+    public static final String TAG_USAGE = "Usage";
 
     private static final String DESCRIPTION = """
             Calculates when IRCTC booking windows open. Pure, deterministic and stateless — no \
@@ -46,6 +47,7 @@ public class OpenApiConfig {
                 .tags(List.of(
                         new Tag().name(TAG_BOOKING).description("General reservation and Tatkal opening calculations"),
                         new Tag().name(TAG_PLANNING).description("Cancellation refund, chart timing and today's booking windows"),
+                        new Tag().name(TAG_USAGE).description("Anonymous usage counts (visits, calculations)"),
                         new Tag().name(TAG_HEALTH).description("Liveness")));
     }
 }

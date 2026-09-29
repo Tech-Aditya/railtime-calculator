@@ -35,7 +35,7 @@ public record CancellationRequest(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Fare is required")
         @DecimalMin(value = "1", message = "Fare must be at least ₹1")
-        @DecimalMax(value = "1000000", message = "Fare looks too large")
+        @DecimalMax(value = "1000000", message = "Fare must not exceed ₹10,00,000")
         @Digits(integer = 7, fraction = 2, message = "Fare can have at most 2 decimal places")
         BigDecimal totalFare,
 

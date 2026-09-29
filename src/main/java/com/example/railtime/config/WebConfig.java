@@ -1,5 +1,6 @@
 package com.example.railtime.config;
 
+import com.example.railtime.controller.Page;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +21,8 @@ public class WebConfig {
         // Tomcat refuses to gzip responses carrying a strong ETag; weak ETags keep compression on.
         filter.setWriteWeakETag(true);
         FilterRegistrationBean<ShallowEtagHeaderFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/", ApiPaths.BOOKING + ApiPaths.RULES, ApiPaths.PUBLIC + "/*");
+        registration.addUrlPatterns(Page.PATHS);
+        registration.addUrlPatterns(ApiPaths.BOOKING + ApiPaths.RULES, ApiPaths.PUBLIC + "/*");
         registration.setName("etagFilter");
         return registration;
     }

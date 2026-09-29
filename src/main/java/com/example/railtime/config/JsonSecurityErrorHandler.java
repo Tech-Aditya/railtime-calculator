@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.example.railtime.model.response.ErrorResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -48,10 +50,26 @@ public class JsonSecurityErrorHandler implements AuthenticationEntryPoint, Acces
     }
 
     private void write(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        log.info("event=access_denied method={} path={}", request.getMethod(), request.getRequestURI());
+        if (isBrowserPageRequest(request)) {
+            // A person typed or followed a URL that isn't one of our pages: show the friendly
+            // "not on the route" page (error.html) rather than a JSON body.
+            log.info("event=page_not_found method={} path={}", request.getMethod(), request.getRequestURI());
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        ErrorResponse body = errors.create(ApiErrorCode.FORBIDDEN, MESSAGE, request.getRequestURI());
+        log.info("event=access_denied requestId={} method={} path={}", body.requestId(), request.getMethod(),
+                request.getRequestURI());
         response.setStatus(ApiErrorCode.FORBIDDEN.status().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        jsonMapper.writeValue(response.getOutputStream(),
-                errors.create(ApiErrorCode.FORBIDDEN, MESSAGE, request.getRequestURI()));
+        jsonMapper.writeValue(response.getOutputStream(), body);
+    }
+
+    /** A GET for an HTML page (not the API, docs or actuator) from a browser. */
+    static boolean isBrowserPageRequest(HttpServletRequest request) {
+        String accept = request.getHeader(HttpHeaders.ACCEPT);
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return "GET".equals(request.getMethod()) && accept != null && accept.contains(MediaType.TEXT_HTML_VALUE)
+                && !path.startsWith("/api/") && !path.startsWith("/actuator") && !path.startsWith("/v3/");
     }
 }

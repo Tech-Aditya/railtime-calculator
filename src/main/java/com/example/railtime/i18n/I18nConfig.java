@@ -1,5 +1,6 @@
 package com.example.railtime.i18n;
 
+import com.example.railtime.controller.Page;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.LocaleResolver;
@@ -22,6 +23,6 @@ public class I18nConfig implements WebMvcConfigurer {
         LocaleChangeInterceptor interceptor = new LocaleChangeInterceptor();
         interceptor.setParamName(LanguageLocaleResolver.PARAM);
         interceptor.setIgnoreInvalidLocale(true);
-        registry.addInterceptor(interceptor).addPathPatterns("/");
+        registry.addInterceptor(interceptor).addPathPatterns(Page.PATHS);
     }
 }

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 820" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Tall line-art for the left page margin (CSS mask; colour comes from the theme). -->
+
+  <!-- Semaphore signal -->
+  <circle cx="80" cy="30" r="6"/>
+  <path d="M80 36 V290"/>
+  <rect x="80" y="64" width="62" height="16" rx="3"/>
+  <path d="M96 64 V80 M110 64 V80" stroke-width="2"/>
+  <circle cx="68" cy="96" r="8"/>
+  <rect x="58" y="110" width="20" height="24" rx="3"/>
+  <path d="M68 104 V110" stroke-width="2"/>
+  <path d="M72 150 H88 M72 180 H88 M72 210 H88 M72 240 H88" stroke-width="2"/>
+  <path d="M56 290 H104 M62 300 H98"/>
+
+  <!-- Station clock on a bracket -->
+  <path d="M56 336 H104 M80 336 V348"/>
+  <circle cx="80" cy="384" r="34"/>
+  <circle cx="80" cy="384" r="28" stroke-width="1.6"/>
+  <path d="M80 360 V366 M80 402 V408 M56 384 H62 M98 384 H104" stroke-width="2"/>
+  <path d="M80 384 V366 M80 384 L94 392"/>
+  <circle cx="80" cy="384" r="2.5" fill="#000"/>
+
+  <!-- Spoked wheel -->
+  <circle cx="80" cy="520" r="44"/>
+  <circle cx="80" cy="520" r="36" stroke-width="1.6"/>
+  <circle cx="80" cy="520" r="8"/>
+  <path d="M80 484 V556 M44 520 H116 M55 495 L105 545 M105 495 L55 545" stroke-width="2"/>
+
+  <!-- Platform lamp post -->
+  <path d="M66 624 L80 610 L94 624"/>
+  <path d="M64 624 H96 L90 654 H70 Z"/>
+  <path d="M74 632 V646 M86 632 V646" stroke-width="1.6"/>
+  <path d="M80 654 V792"/>
+  <path d="M80 690 H104 M100 690 V700" stroke-width="2"/>
+  <rect x="62" y="792" width="36" height="10" rx="2"/>
+</svg>

@@ -75,13 +75,12 @@ class LanguageSwitchTest {
         // Clock: 28 Sep 2026, 08:00 IST — today's opening has just happened; Tatkal windows not yet open.
         String english = html(get("/"));
         assertThat(english)
-                .doesNotContain("id=\"today\" class=\"today container\" aria-labelledby=\"today-title\" hidden")
-                .contains("data-slot=\"latest\">27 Nov 2026<", "data-slot=\"next\">28 Nov 2026<")
-                .contains("data-slot=\"next-when\">Tomorrow, 08:00 AM IST<", "data-slot=\"tatkal\">29 Sep 2026<")
+                .contains("data-today=\"latest\">27 Nov 2026<", "data-today=\"next\">28 Nov 2026<")
+                .contains("data-today=\"next-time\">08:00 AM IST<", "data-today=\"next-day\">Tomorrow<", "data-today=\"tatkal\">29 Sep 2026<")
                 .contains(">AC · 10:00 AM<", ">Non-AC · 11:00 AM<");
 
         assertThat(html(get("/").param("lang", "hi")))
-                .contains("data-slot=\"latest\">27 नवंबर 2026<", "data-slot=\"next-when\">कल, 08:00 AM IST<")
+                .contains("data-today=\"latest\">27 नवंबर 2026<", "data-today=\"next-day\">कल<")
                 .contains(">एसी · 10:00 AM<", ">नॉन-एसी · 11:00 AM<");
     }
 
@@ -112,6 +111,16 @@ class LanguageSwitchTest {
                 .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
         assertThat(html(get("/").param("lang", "fr"))).contains("<html lang=\"en\">", ENGLISH_TITLE);
         assertThat(html(get("/").cookie(new Cookie("railtime.lang", "xx")))).contains(ENGLISH_TITLE);
+    }
+
+    @Test
+    void languageLinksKeepTheCurrentPage() throws Exception {
+        String html = html(get("/refund").param("lang", "hi"));
+
+        assertThat(html)
+                .contains("href=\"/refund?lang=en\"", "href=\"/refund?lang=hi\"")
+                .contains("<link rel=\"canonical\" href=\"http://localhost:8080/refund?lang=hi\">")
+                .contains("<title>रिफ़ंड कैलकुलेटर · RailTime कैलकुलेटर</title>");
     }
 
     @Test

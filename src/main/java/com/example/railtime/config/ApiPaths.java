@@ -10,6 +10,7 @@ public final class ApiPaths {
     public static final String CANCELLATION_CALCULATE = "/cancellation/calculate";
     public static final String CHART_CALCULATE = "/chart/calculate";
     public static final String WINDOW = "/window";
+    public static final String USAGE = "/api/v1/usage";
     public static final String PUBLIC = "/public";
     public static final String HEALTH = "/health";
 

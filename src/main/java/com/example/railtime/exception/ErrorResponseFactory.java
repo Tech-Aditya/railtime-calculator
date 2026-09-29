@@ -5,10 +5,15 @@ import com.example.railtime.properties.BookingRulesProperties;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Component;
 
-/** Builds {@link ErrorResponse} bodies with an IST timestamp; shared by MVC and security error paths. */
+/**
+ * Builds {@link ErrorResponse} bodies with an IST timestamp and a short reference id; shared by
+ * the MVC and security error paths.
+ */
 @Component
 public class ErrorResponseFactory {
 
@@ -20,18 +25,29 @@ public class ErrorResponseFactory {
         this.properties = properties;
     }
 
+    /** A short, random, non-sequential reference (8 hex characters) to correlate a response with the log. */
+    public String newRequestId() {
+        return HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
+    }
+
     public ErrorResponse create(ApiErrorCode code, String message, String path) {
-        return create(code, message, path, List.of());
+        return create(code, message, path, List.of(), newRequestId());
     }
 
     public ErrorResponse create(ApiErrorCode code, String message, String path,
                                 List<ErrorResponse.FieldViolation> details) {
+        return create(code, message, path, details, newRequestId());
+    }
+
+    public ErrorResponse create(ApiErrorCode code, String message, String path,
+                                List<ErrorResponse.FieldViolation> details, String requestId) {
         return new ErrorResponse(
                 OffsetDateTime.now(clock.withZone(properties.timezone())).truncatedTo(ChronoUnit.SECONDS),
                 code.status().value(),
                 code.name(),
                 message,
                 path,
-                details);
+                details,
+                requestId);
     }
 }

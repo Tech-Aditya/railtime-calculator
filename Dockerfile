@@ -33,12 +33,18 @@ COPY --from=build --chown=railtime:railtime /workspace/target/extracted/applicat
 
 USER railtime
 
+# PORT: the app listens on $PORT (server.port=${PORT:8080}). Render injects PORT itself;
+# locally the default 8080 applies. JAVA_TOOL_OPTIONS sizes the heap from the container limit,
+# so it also fits small instances (e.g. 512 MB).
 ENV SPRING_PROFILES_ACTIVE=prod \
+    PORT=8080 \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC"
 
 EXPOSE 8080
 
+# Container-level check for Docker/Compose (Render uses healthCheckPath from render.yaml instead).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/actuator/health/liveness >/dev/null || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT}/actuator/health/liveness" >/dev/null || exit 1
 
+# exec form: java is PID 1 and receives SIGTERM directly, so graceful shutdown works.
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
