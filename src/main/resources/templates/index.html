@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html th:lang="${lang.code()}" lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="#{meta.title}">IRCTC Ticket Booking Date Calculator</title>
+    <meta name="description" th:content="#{meta.description}">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#172554">
+    <link rel="canonical" th:href="${lang.name() == 'EN'} ? (${siteUrl} + '/') : (${siteUrl} + '/?lang=' + ${lang.code()})">
+    <link th:each="l : ${languages}" rel="alternate" th:hreflang="${l.code()}" th:href="${siteUrl} + '/?lang=' + ${l.code()}">
+    <link rel="alternate" hreflang="x-default" th:href="${siteUrl} + '/'">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="RailTime Calculator">
+    <meta property="og:title" th:content="#{meta.title}">
+    <meta property="og:description" th:content="#{meta.ogDescription}">
+    <meta property="og:url" th:content="${siteUrl} + '/'">
+    <meta property="og:image" th:content="${siteUrl} + '/images/og-image.png'">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" th:content="${lang.ogLocale()}">
+    <meta th:each="l : ${languages}" th:if="${l != lang}" property="og:locale:alternate" th:content="${l.ogLocale()}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" th:content="#{meta.title}">
+    <meta name="twitter:description" th:content="#{meta.ogDescription}">
+
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <link rel="manifest" th:href="@{/site.webmanifest}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link th:if="${lang.name() == 'HI'}" rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap">
+    <script th:src="@{/js/theme.js}"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <script type="module" th:src="@{/js/app.js}"></script>
+</head>
+<body th:attr="data-min-date=${minDate},data-max-date=${maxDate}">
+
+<!-- Translations and rule values for app.js (data only; never executed). -->
+<script type="application/json" id="page-data" th:utext="${pageData}"></script>
+
+<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true">
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+    <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M9 7h6M9 10h6M11.5 7a3 3 0 0 1 0 6H9l4.5 4"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M12 11h4M12 16h4M8 11h.01M8 16h.01"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+</svg>
+
+<a class="skip-link" href="#calculators" th:text="#{skip}">Skip to calculators</a>
+
+<header class="site-header">
+    <div class="container header-inner">
+        <a class="brand" href="#top" th:aria-label="#{brand.aria}">
+            <img class="brand-mark" th:src="@{/favicon.svg}" src="/favicon.svg" alt="" width="32" height="32">
+            <span class="brand-text">
+                <span class="brand-name">RailTime</span>
+                <span class="brand-sub" th:text="#{brand.sub}">Calculator</span>
+            </span>
+        </a>
+        <nav id="site-nav" class="site-nav" th:aria-label="#{nav.aria}">
+            <a href="#top" class="nav-link" th:text="#{nav.home}">Home</a>
+            <a href="#general" class="nav-link" th:text="#{nav.general}">General</a>
+            <a href="#tatkal" class="nav-link" th:text="#{nav.tatkal}">Tatkal</a>
+            <a href="#refund" class="nav-link" th:text="#{nav.refund}">Refund</a>
+            <a href="#chart" class="nav-link" th:text="#{nav.chart}">Chart</a>
+            <a th:if="${docsEnabled}" th:href="@{/swagger-ui.html}" class="nav-link">API</a>
+        </nav>
+        <div class="header-actions">
+            <!-- Plain links: switching works without JavaScript, and ?lang= is remembered in a cookie. -->
+            <details class="lang-menu">
+                <summary class="lang-toggle" th:title="#{lang.choose}">
+                    <svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg>
+                    <span class="lang-current" th:text="${lang.shortLabel()}">EN</span>
+                    <span class="sr-only" th:text="#{lang.choose}">Change language</span>
+                </summary>
+                <ul class="lang-list">
+                    <li th:each="l : ${languages}">
+                        <a class="lang-option" th:href="@{/(lang=${l.code()})}" th:lang="${l.code()}" th:hreflang="${l.code()}"
+                           th:attr="aria-current=${l == lang} ? 'true' : null">
+                            <span th:text="${l.nativeName()}">English</span>
+                            <svg th:if="${l == lang}" class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+                        </a>
+                    </li>
+                </ul>
+            </details>
+            <button type="button" class="theme-toggle" th:aria-label="#{js.theme.toDark}" th:title="#{js.theme.toDark}">
+                <svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+            </button>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav" th:aria-label="#{js.menu.open}">
+                <svg class="icon icon-open" aria-hidden="true"><use href="#i-menu"/></svg>
+                <svg class="icon icon-close" aria-hidden="true"><use href="#i-close"/></svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+<main id="top">
+    <section class="intro container" aria-labelledby="intro-title">
+        <h1 id="intro-title" th:text="#{intro.title}">Know exactly when your ticket booking opens.</h1>
+        <p class="intro-text" th:text="#{intro.text}">Booking opening times, cancellation refunds and chart times, from official railway rules.</p>
+    </section>
+
+    <!-- Live booking windows: rendered on the server (no layout shift), kept live by app.js. -->
+    <section id="today" class="today container" aria-labelledby="today-title"
+             th:data-endpoint="@{/api/v1/booking/window}" th:with="s=${todayStrip}">
+        <div class="today-card">
+            <h2 id="today-title" class="today-title"><span class="live-dot" aria-hidden="true"></span><span th:text="#{today.title}">Today</span></h2>
+            <div class="today-grid">
+                <div class="today-cell">
+                    <p class="today-cap" th:text="#{today.latest}">Bookable up to</p>
+                    <p class="today-value" data-slot="latest" th:text="${s.latest()}">27 Nov 2026</p>
+                    <p class="today-sub" th:text="#{today.latestSub}">General reservation</p>
+                </div>
+                <div class="today-cell">
+                    <p class="today-cap" th:text="#{today.next}">Next date opens</p>
+                    <p class="today-value" data-slot="next" th:text="${s.next()}">28 Nov 2026</p>
+                    <p class="today-sub"><span data-slot="next-when" th:text="${s.nextWhen()}">Tomorrow, 08:00 AM IST</span> <span class="today-count" data-slot="next-count"></span></p>
+                </div>
+                <div class="today-cell">
+                    <p class="today-cap" th:text="#{today.tatkal}">Tatkal today</p>
+                    <p class="today-value" data-slot="tatkal" th:text="${s.tatkal()}">30 Sep 2026</p>
+                    <p class="today-sub today-pills">
+                        <span class="mini-pill" data-slot="ac" th:text="${s.ac()}" th:classappend="${s.acOpen()} ? 'is-open'">AC · 10:00 AM</span>
+                        <span class="mini-pill" data-slot="nonac" th:text="${s.nonAc()}" th:classappend="${s.nonAcOpen()} ? 'is-open'">Non-AC · 11:00 AM</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="calculators" class="tool-group container" aria-labelledby="book-title" tabindex="-1">
+        <h2 id="book-title" class="section-label" th:text="#{group.before}">Before you book</h2>
+        <div class="calculators">
+        <article id="general" class="calc-card kind-general" aria-labelledby="general-title">
+            <header class="card-hero">
+                <span class="card-icon" aria-hidden="true"><svg class="icon"><use href="#i-calendar"/></svg></span>
+                <div>
+                    <p class="card-label" th:text="#{js.kind.general}">General reservation</p>
+                    <h2 id="general-title" th:text="#{general.title(${arpDays})}">60-Day Booking Window</h2>
+                    <p class="card-desc" th:text="#{general.desc}">Calculate when general reservation opens.</p>
+                </div>
+            </header>
+
+            <form id="general-form" class="calc-form" novalidate autocomplete="off" data-kind="general"
+                  th:data-endpoint="@{/api/v1/booking/general/calculate}">
+                <div class="field-row">
+                    <div class="field">
+                        <label for="general-date" th:text="#{field.originDate}">Origin departure date</label>
+                        <input type="date" id="general-date" name="originDepartureDate" required
+                               th:min="${minDate}" th:max="${maxDate}"
+                               aria-describedby="general-date-display general-date-error">
+                        <p class="date-display" id="general-date-display"></p>
+                        <p class="field-error" id="general-date-error" role="alert"></p>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary"><span class="btn-spinner" aria-hidden="true"></span><span class="btn-label" th:text="#{js.btn.calculate}">Calculate</span></button>
+            </form>
+        </article>
+
+        <article id="tatkal" class="calc-card kind-tatkal" aria-labelledby="tatkal-title">
+            <header class="card-hero">
+                <span class="card-icon" aria-hidden="true"><svg class="icon"><use href="#i-zap"/></svg></span>
+                <div>
+                    <p class="card-label" th:text="#{js.kind.tatkal}">Tatkal</p>
+                    <h2 id="tatkal-title" th:text="#{tatkal.title}">Tatkal Opening Time</h2>
+                    <p class="card-desc" th:text="#{tatkal.desc}">Calculate when Tatkal opens for your class.</p>
+                </div>
+            </header>
+
+            <form id="tatkal-form" class="calc-form" novalidate autocomplete="off" data-kind="tatkal"
+                  th:data-endpoint="@{/api/v1/booking/tatkal/calculate}">
+                <div class="field-row field-row-split">
+                    <div class="field">
+                        <label for="tatkal-date" th:text="#{field.originDate}">Origin departure date</label>
+                        <input type="date" id="tatkal-date" name="originDepartureDate" required
+                               th:min="${minDate}" th:max="${maxDate}"
+                               aria-describedby="tatkal-date-display tatkal-date-error">
+                        <p class="date-display" id="tatkal-date-display"></p>
+                        <p class="field-error" id="tatkal-date-error" role="alert"></p>
+                    </div>
+                    <div class="field">
+                        <label for="tatkal-class" th:text="#{field.travelClass}">Travel class</label>
+                        <div class="select-wrap">
+                            <select id="tatkal-class" name="travelClass" required aria-describedby="tatkal-class-error">
+                                <option th:each="tc, s : ${tatkalClasses}" th:value="${tc.code()}" th:text="#{${'js.class.' + tc.code()}}"
+                                        th:selected="${s.first}">Sleeper (SL)</option>
+                            </select>
+                        </div>
+                        <p class="field-error" id="tatkal-class-error" role="alert"></p>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary"><span class="btn-spinner" aria-hidden="true"></span><span class="btn-label" th:text="#{js.btn.calculate}">Calculate</span></button>
+            </form>
+        </article>
+        </div>
+    </section>
+
+    <section id="planning" class="tool-group container" aria-labelledby="plan-title">
+        <h2 id="plan-title" class="section-label" th:text="#{group.after}">After you book</h2>
+        <div class="calculators">
+        <article id="refund" class="calc-card kind-refund" aria-labelledby="refund-title">
+            <header class="card-hero">
+                <span class="card-icon" aria-hidden="true"><svg class="icon"><use href="#i-receipt"/></svg></span>
+                <div>
+                    <p class="card-label" th:text="#{refund.label}">Cancellation</p>
+                    <h2 id="refund-title" th:text="#{refund.title}">Refund Calculator</h2>
+                    <p class="card-desc" th:text="#{refund.desc}">Estimate your refund before you cancel.</p>
+                </div>
+            </header>
+
+            <form id="refund-form" class="calc-form" novalidate autocomplete="off" data-kind="refund"
+                  th:data-endpoint="@{/api/v1/booking/cancellation/calculate}">
+                <div class="field-row field-row-pair">
+                    <div class="field">
+                        <label for="refund-class" th:text="#{field.travelClass}">Travel class</label>
+                        <div class="select-wrap">
+                            <select id="refund-class" name="travelClass" required aria-describedby="refund-class-error">
+                                <option th:each="tc, s : ${tatkalClasses}" th:value="${tc.code()}" th:text="#{${'js.class.' + tc.code()}}"
+                                        th:selected="${s.first}">Sleeper (SL)</option>
+                            </select>
+                        </div>
+                        <p class="field-error" id="refund-class-error" role="alert"></p>
+                    </div>
+                    <div class="field">
+                        <label for="refund-status" th:text="#{field.ticketStatus}">Ticket status</label>
+                        <div class="select-wrap">
+                            <select id="refund-status" name="ticketStatus" required aria-describedby="refund-status-error">
+                                <option th:each="st, s : ${ {'CONFIRMED', 'CONFIRMED_TATKAL', 'RAC', 'WAITLISTED'} }"
+                                        th:value="${st}" th:text="#{${'js.status.' + st}}" th:selected="${s.first}">Confirmed</option>
+                            </select>
+                        </div>
+                        <p class="field-error" id="refund-status-error" role="alert"></p>
+                    </div>
+                </div>
+                <div class="field-row field-row-pair">
+                    <div class="field">
+                        <label for="refund-fare" th:text="#{field.fare}">Total fare paid</label>
+                        <div class="input-prefix" data-prefix="₹">
+                            <input type="text" id="refund-fare" name="totalFare" inputmode="decimal" autocomplete="off"
+                                   placeholder="0.00" required aria-describedby="refund-fare-error">
+                        </div>
+                        <p class="field-error" id="refund-fare-error" role="alert"></p>
+                    </div>
+                    <div class="field">
+                        <label for="refund-passengers" th:text="#{field.passengers}">Passengers</label>
+                        <div class="select-wrap">
+                            <select id="refund-passengers" name="passengers" required>
+                                <option th:each="n : ${#numbers.sequence(1, 6)}" th:value="${n}" th:text="${n}"
+                                        th:selected="${n == 1}">1</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="field-row field-row-pair">
+                    <div class="field">
+                        <label for="refund-date" th:text="#{field.departureDate}">Departure date</label>
+                        <input type="date" id="refund-date" name="departureDate" required
+                               th:min="${minDate}" th:max="${maxDate}"
+                               aria-describedby="refund-date-error">
+                        <p class="field-error" id="refund-date-error" role="alert"></p>
+                    </div>
+                    <div class="field">
+                        <label for="refund-time" th:text="#{field.departureTime}">Departure time</label>
+                        <input type="time" id="refund-time" name="departureTime" required aria-describedby="refund-time-error">
+                        <p class="field-error" id="refund-time-error" role="alert"></p>
+                    </div>
+                </div>
+                <fieldset class="field-group">
+                    <legend><span th:text="#{field.cancelling}">Cancelling at</span> <span class="optional" th:text="#{field.cancellingHint}">optional · blank = now</span></legend>
+                    <div class="field-row field-row-pair">
+                        <div class="field">
+                            <label for="refund-cancel-date" class="sr-only" th:text="#{field.cancelDate}">Cancellation date</label>
+                            <input type="date" id="refund-cancel-date" name="cancellationDate"
+                                   th:min="${minDate}" th:max="${maxDate}" aria-describedby="refund-cancel-date-error">
+                            <p class="field-error" id="refund-cancel-date-error" role="alert"></p>
+                        </div>
+                        <div class="field">
+                            <label for="refund-cancel-time" class="sr-only" th:text="#{field.cancelTime}">Cancellation time</label>
+                            <input type="time" id="refund-cancel-time" name="cancellationTime" aria-describedby="refund-cancel-time-error">
+                            <p class="field-error" id="refund-cancel-time-error" role="alert"></p>
+                        </div>
+                    </div>
+                </fieldset>
+                <button type="submit" class="btn btn-primary"><span class="btn-spinner" aria-hidden="true"></span><span class="btn-label" th:text="#{js.btn.calculate}">Calculate</span></button>
+            </form>
+        </article>
+
+        <article id="chart" class="calc-card kind-chart" aria-labelledby="chart-title">
+            <header class="card-hero">
+                <span class="card-icon" aria-hidden="true"><svg class="icon"><use href="#i-clipboard"/></svg></span>
+                <div>
+                    <p class="card-label" th:text="#{chart.label}">Reservation chart</p>
+                    <h2 id="chart-title" th:text="#{chart.title}">Chart Preparation Time</h2>
+                    <p class="card-desc" th:text="#{chart.desc}">Know when your waitlist gets its final status.</p>
+                </div>
+            </header>
+
+            <form id="chart-form" class="calc-form" novalidate autocomplete="off" data-kind="chart"
+                  th:data-endpoint="@{/api/v1/booking/chart/calculate}">
+                <div class="field-row field-row-pair">
+                    <div class="field">
+                        <label for="chart-date" th:text="#{field.originDate}">Origin departure date</label>
+                        <input type="date" id="chart-date" name="departureDate" required
+                               th:min="${minDate}" th:max="${maxDate}"
+                               aria-describedby="chart-date-error">
+                        <p class="field-error" id="chart-date-error" role="alert"></p>
+                    </div>
+                    <div class="field">
+                        <label for="chart-time" th:text="#{field.departureTime}">Departure time</label>
+                        <input type="time" id="chart-time" name="departureTime" required aria-describedby="chart-time-error">
+                        <p class="field-error" id="chart-time-error" role="alert"></p>
+                    </div>
+                </div>
+                <div class="rule-legend">
+                    <p class="rule-legend-title" th:text="#{chart.howTitle}">How charting works</p>
+                    <ol>
+                        <li>
+                            <span class="rl-step">1</span>
+                            <span><span class="rl-when" th:text="#{chart.rule1When(${chartBandStart}, ${chartBandEnd})}">Departs 05:00 AM – 02:00 PM</span>
+                            <span th:utext="#{chart.rule1(${chartPreviousDayTime})}">First chart by <strong>09:00 PM</strong> the previous day</span></span>
+                        </li>
+                        <li>
+                            <span class="rl-step">2</span>
+                            <span><span class="rl-when" th:text="#{chart.rule2When}">All other departures</span>
+                            <span th:utext="#{chart.rule2(${chartHoursBefore})}">First chart <strong>8 hours</strong> before departure</span></span>
+                        </li>
+                        <li>
+                            <span class="rl-step">3</span>
+                            <span><span class="rl-when" th:text="#{js.chart.final}">Final chart</span>
+                            <span th:utext="#{chart.rule3(${finalChartMinutes})}"><strong>30 minutes</strong> before departure</span></span>
+                        </li>
+                    </ol>
+                </div>
+                <button type="submit" class="btn btn-primary"><span class="btn-spinner" aria-hidden="true"></span><span class="btn-label" th:text="#{js.btn.calculate}">Calculate</span></button>
+            </form>
+        </article>
+        </div>
+    </section>
+
+    <section id="result" class="result-section container" aria-labelledby="result-title">
+        <h2 id="result-title" class="section-label" th:text="#{result.title}">Result</h2>
+        <div class="result-region" id="result-region" aria-live="polite" aria-atomic="true">
+            <p class="result-empty" th:text="#{result.empty}">Fill in any calculator above to see your result here.</p>
+        </div>
+    </section>
+
+    <section id="info" class="info-section container" aria-labelledby="info-title">
+        <div class="info-card">
+            <h2 id="info-title"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span th:text="#{info.title}">Important information</span></h2>
+            <ul>
+                <li th:utext="#{info.origin}">Opening dates are calculated from the train’s originating-station departure date.</li>
+                <li th:text="#{info.arp(${arpDays}, ${generalOpeningTime})}">The standard advance reservation period is 60 days.</li>
+                <li th:text="#{info.tatkal(${tatkalDaysBefore}, ${tatkalAcTime}, ${tatkalNonAcTime})}">Tatkal opens one day before the origin departure date.</li>
+                <li th:text="#{info.firstAc}">1A is not listed under the standard Tatkal classes.</li>
+                <li th:text="#{info.refund(${clerkage})}">Refunds follow the 2015 refund rules.</li>
+                <li th:text="#{info.chart}">First charts follow the Railway Board directive of July 2025.</li>
+            </ul>
+            <p class="sources"><span th:text="#{info.sources}">Sources:</span>
+                <a href="https://contents.irctc.co.in/en/eticketCancel.html" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.irctc}">IRCTC cancellation rules</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>,
+                <a href="https://www.pib.gov.in/PressReleasePage.aspx?PRID=1527662&amp;reg=48&amp;lang=2" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.pib}">PIB refund rules</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>,
+                <a href="https://cr.indianrailways.gov.in/view_detail.jsp?lang=0&amp;dcd=9856&amp;id=0%2C4%2C268" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.cr}">Central Railway charting notice</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>.
+            </p>
+            <p class="disclaimer" th:utext="#{info.disclaimer}">RailTime is an independent informational tool and is not affiliated with or operated by IRCTC or Indian Railways.</p>
+        </div>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <p class="footer-name">RailTime Calculator</p>
+        <nav class="footer-nav" th:aria-label="#{footer.aria}">
+            <a href="#general" th:text="#{js.kind.general}">General reservation</a>
+            <span aria-hidden="true">•</span>
+            <a href="#tatkal" th:text="#{nav.tatkal}">Tatkal</a>
+            <span aria-hidden="true">•</span>
+            <a href="#refund" th:text="#{nav.refund}">Refund</a>
+            <span aria-hidden="true">•</span>
+            <a href="#chart" th:text="#{nav.chart}">Chart</a>
+            <th:block th:if="${docsEnabled}">
+                <span aria-hidden="true">•</span>
+                <a th:href="@{/swagger-ui.html}">API</a>
+            </th:block>
+        </nav>
+        <p class="footer-note" th:text="#{footer.note}">Independent informational tool. Not affiliated with IRCTC or Indian Railways.</p>
+        <p class="footer-copy">© 2026 RailTime</p>
+    </div>
+</footer>
+
+<!-- Result templates: filled with textContent only (no HTML injection). -->
+<template id="tpl-result">
+    <div class="result">
+        <div class="ticket">
+            <div class="ticket-stub">
+                <span class="stub-kind" data-slot="kind"></span>
+                <div class="cal-tile" aria-hidden="true">
+                    <span class="cal-month" data-slot="cal-month"></span>
+                    <span class="cal-day" data-slot="cal-day"></span>
+                    <span class="cal-year" data-slot="cal-year"></span>
+                </div>
+                <span class="stub-weekday" data-slot="weekday"></span>
+            </div>
+            <div class="ticket-main">
+                <div class="result-head">
+                    <p class="result-label" data-slot="label"></p>
+                    <span class="status-pill" data-slot="pill"></span>
+                </div>
+                <p class="result-date" data-slot="date"></p>
+                <div class="result-chips">
+                    <span class="time-chip"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span data-slot="time"></span></span>
+                    <span class="class-chip" data-slot="class" hidden></span>
+                </div>
+                <div class="journey-line">
+                    <div class="jl-point"><span class="jl-dot"></span><span class="jl-cap" th:text="#{result.opens}">Opens</span><span class="jl-date" data-slot="tl-open"></span></div>
+                    <div class="jl-track"><span class="jl-gap" data-slot="tl-gap"></span></div>
+                    <div class="jl-point jl-end"><span class="jl-dot"></span><span class="jl-cap" th:text="#{result.departure}">Departure</span><span class="jl-date" data-slot="tl-journey"></span></div>
+                </div>
+            </div>
+        </div>
+        <div class="result-foot">
+            <div class="countdown" data-slot="countdown" hidden>
+                <p class="countdown-label" th:text="#{result.bookingIn}">Booking opens in</p>
+                <div class="countdown-grid" role="timer" aria-live="off">
+                    <div class="cd-unit"><span class="cd-value" data-unit="days">00</span><span class="cd-name" th:text="#{cd.days}">Days</span></div>
+                    <div class="cd-unit"><span class="cd-value" data-unit="hours">00</span><span class="cd-name" th:text="#{cd.hours}">Hours</span></div>
+                    <div class="cd-unit"><span class="cd-value" data-unit="minutes">00</span><span class="cd-name" th:text="#{cd.minutes}">Minutes</span></div>
+                    <div class="cd-unit"><span class="cd-value" data-unit="seconds">00</span><span class="cd-name" th:text="#{cd.seconds}">Seconds</span></div>
+                </div>
+            </div>
+            <p class="status-banner" data-slot="banner" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+                <span><strong data-slot="banner-title"></strong> <span data-slot="banner-text"></span></span>
+            </p>
+            <div class="result-actions" data-slot="actions">
+                <button type="button" class="btn btn-quiet" data-slot="reminder">
+                    <svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span th:text="#{result.reminder}">Add reminder</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="tpl-not-applicable">
+    <div class="result result-na kind-tatkal">
+        <div class="ticket">
+            <div class="ticket-stub">
+                <span class="stub-kind" th:text="#{js.kind.tatkal}">Tatkal</span>
+                <div class="cal-tile cal-tile-code" aria-hidden="true">
+                    <span class="cal-month" th:text="#{na.class}">Class</span>
+                    <span class="cal-day" data-slot="code"></span>
+                </div>
+            </div>
+            <div class="ticket-main">
+                <div class="result-head">
+                    <p class="result-label" data-slot="class"></p>
+                    <span class="status-pill pill-neutral" th:text="#{na.verify}">Verify with IRCTC</span>
+                </div>
+                <p class="na-text"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span data-slot="message"></span></p>
+                <p class="na-origin"><span th:text="#{na.origin}">Origin departure</span> <strong data-slot="origin"></strong></p>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="tpl-refund">
+    <div class="result kind-refund">
+        <div class="ticket">
+            <div class="ticket-stub">
+                <span class="stub-kind" th:text="#{refund.label}">Cancellation</span>
+                <div class="cal-tile cal-tile-code" aria-hidden="true">
+                    <span class="cal-month" th:text="#{refund.tile}">Refund</span>
+                    <span class="cal-day" data-slot="percent"></span>
+                    <span class="cal-year" th:text="#{refund.ofFare}">of fare</span>
+                </div>
+                <span class="stub-weekday" data-slot="class-name"></span>
+            </div>
+            <div class="ticket-main">
+                <div class="result-head">
+                    <p class="result-label" th:text="#{refund.estimated}">Estimated refund</p>
+                    <span class="status-pill" data-slot="pill"></span>
+                </div>
+                <p class="result-date result-amount" data-slot="refund-big"></p>
+                <div class="result-chips">
+                    <span class="time-chip"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span data-slot="lead"></span></span>
+                    <span class="class-chip" data-slot="ticket"></span>
+                </div>
+                <dl class="breakdown">
+                    <div><dt th:text="#{refund.fare}">Fare paid</dt><dd data-slot="fare"></dd></div>
+                    <div><dt><span th:text="#{refund.charge}">Cancellation charge</span> <span class="bd-note" data-slot="charge-note"></span></dt><dd data-slot="charge"></dd></div>
+                    <div data-slot="gst-row"><dt>GST <span class="bd-note" data-slot="gst-note"></span></dt><dd data-slot="gst"></dd></div>
+                    <div class="bd-total"><dt th:text="#{refund.tile}">Refund</dt><dd data-slot="refund"></dd></div>
+                </dl>
+            </div>
+        </div>
+        <div class="result-foot">
+            <p class="rule-line"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span data-slot="rule"></span></p>
+            <details class="result-notes">
+                <summary th:text="#{result.how}">How this is calculated</summary>
+                <ul data-slot="notes"></ul>
+            </details>
+        </div>
+    </div>
+</template>
+
+<template id="tpl-chart">
+    <div class="result kind-chart">
+        <div class="ticket">
+            <div class="ticket-stub">
+                <span class="stub-kind" th:text="#{nav.chart}">Chart</span>
+                <div class="cal-tile" aria-hidden="true">
+                    <span class="cal-month" data-slot="cal-month"></span>
+                    <span class="cal-day" data-slot="cal-day"></span>
+                    <span class="cal-year" data-slot="cal-year"></span>
+                </div>
+                <span class="stub-weekday" data-slot="weekday"></span>
+            </div>
+            <div class="ticket-main">
+                <div class="result-head">
+                    <p class="result-label" th:text="#{chart.first}">First chart</p>
+                    <span class="status-pill" data-slot="pill"></span>
+                </div>
+                <p class="result-date" data-slot="date"></p>
+                <div class="result-chips">
+                    <span class="time-chip"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span data-slot="time"></span></span>
+                    <span class="class-chip" data-slot="rule-chip"></span>
+                </div>
+                <div class="journey-line journey-line-3">
+                    <div class="jl-point"><span class="jl-dot"></span><span class="jl-cap" th:text="#{chart.first}">First chart</span><span class="jl-date" data-slot="tl-first"></span><span class="jl-time" data-slot="tl-first-time"></span></div>
+                    <div class="jl-track"></div>
+                    <div class="jl-point jl-mid"><span class="jl-dot"></span><span class="jl-cap" th:text="#{js.chart.final}">Final chart</span><span class="jl-date" data-slot="tl-final"></span><span class="jl-time" data-slot="tl-final-time"></span></div>
+                    <div class="jl-track"></div>
+                    <div class="jl-point jl-end"><span class="jl-dot"></span><span class="jl-cap" th:text="#{result.departure}">Departure</span><span class="jl-date" data-slot="tl-dep"></span><span class="jl-time" data-slot="tl-dep-time"></span></div>
+                </div>
+            </div>
+        </div>
+        <div class="result-foot">
+            <div class="countdown" data-slot="countdown" hidden>
+                <p class="countdown-label" th:text="#{chart.firstIn}">First chart in</p>
+                <div class="countdown-grid" role="timer" aria-live="off">
+                    <div class="cd-unit"><span class="cd-value" data-unit="days">00</span><span class="cd-name" th:text="#{cd.days}">Days</span></div>
+                    <div class="cd-unit"><span class="cd-value" data-unit="hours">00</span><span class="cd-name" th:text="#{cd.hours}">Hours</span></div>
+                    <div class="cd-unit"><span class="cd-value" data-unit="minutes">00</span><span class="cd-name" th:text="#{cd.minutes}">Minutes</span></div>
+                    <div class="cd-unit"><span class="cd-value" data-unit="seconds">00</span><span class="cd-name" th:text="#{cd.seconds}">Seconds</span></div>
+                </div>
+            </div>
+            <p class="status-banner" data-slot="banner" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+                <span><strong data-slot="banner-title"></strong> <span data-slot="banner-text"></span></span>
+            </p>
+            <details class="result-notes">
+                <summary th:text="#{result.how}">How this is calculated</summary>
+                <ul data-slot="notes"></ul>
+            </details>
+        </div>
+    </div>
+</template>
+
+<template id="tpl-error">
+    <p class="result-error" role="alert"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span data-slot="message"></span></p>
+</template>
+</body>
+</html>

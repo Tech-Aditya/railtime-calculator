@@ -1,0 +1,129 @@
+# ---------------------------------------------------------------------------
+# RailTime Calculator — shared configuration (all profiles)
+# Profile-specific overrides: application-dev.yml, application-prod.yml
+# Secrets are never stored here; everything environment-specific is an env var.
+# ---------------------------------------------------------------------------
+spring:
+  application:
+    name: railtime-calculator
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  main:
+    banner-mode: off
+  thymeleaf:
+    cache: true
+  # Web interface translations: messages.properties (English) + messages_<lang>.properties.
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  web:
+    resources:
+      # Fingerprinted asset URLs (app-<hash>.css) allow year-long immutable caching.
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /css/**,/js/**
+      cache:
+        cachecontrol:
+          max-age: 365d
+          cache-public: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    # Spring serves .js as text/javascript (RFC 9239); application/javascript kept for older clients.
+    mime-types: text/html,text/css,text/javascript,application/javascript,application/json,image/svg+xml,application/manifest+json
+    min-response-size: 1KB
+  tomcat:
+    keep-alive-timeout: 20s
+    max-keep-alive-requests: 200
+  error:
+    include-stacktrace: never
+    include-exception: false
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  info:
+    env:
+      enabled: false
+
+# ---------------------------------------------------------------------------
+# IRCTC booking rules. Change here (or via env vars) when IRCTC changes a rule.
+# Source: official IRCTC website — verify before changing.
+# ---------------------------------------------------------------------------
+booking:
+  timezone: Asia/Kolkata
+  general:
+    # Advance Reservation Period, excluding the date of journey
+    advance-days: ${BOOKING_ARP_DAYS:60}
+    opening-time: "08:00"
+  tatkal:
+    days-before-departure: 1
+    ac-opening-time: "10:00"
+    non-ac-opening-time: "11:00"
+  validation:
+    max-days-in-past: 365
+    max-days-in-future: 730
+  # Cancellation charges: Railway Passengers (Cancellation of Tickets and Refund of Fares) Rules, 2015
+  # (as published by IRCTC). Hours are measured before the scheduled departure.
+  cancellation:
+    flat-charges:          # minimum charge per passenger, confirmed tickets (Rs.)
+      "[1A]": 240
+      "[EC]": 240
+      "[2A]": 200
+      "[FC]": 200
+      "[3A]": 180
+      "[CC]": 180
+      "[3E]": 180
+      "[SL]": 120
+      "[2S]": 60
+    clerkage: 60           # per passenger, RAC / waitlisted tickets (Rs.)
+    gst-rate-percent: 5    # levied on the cancellation charge / clerkage for gst-classes
+    gst-classes: [1A, EC, 2A, FC, 3A, CC, 3E]
+    flat-charge-above-hours: 48
+    quarter-charge-from-hours: 12
+    quarter-rate-percent: 25
+    half-rate-percent: 50
+    confirmed-cutoff-hours: 4
+    rac-waitlist-cutoff-minutes: 30
+  # Reservation chart timings: Railway Board directive effective 10 July 2025.
+  chart:
+    first-chart-hours-before: 8
+    previous-day-band-start: "05:00"
+    previous-day-band-end: "14:00"
+    previous-day-chart-time: "21:00"
+    final-chart-minutes-before: 30
+    effective-from: 2025-07-10
+
+railtime:
+  site-url: ${SITE_URL:http://localhost:8080}
+  docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  rules-cache-max-age: 1h
+
+springdoc:
+  api-docs:
+    enabled: ${railtime.docs.enabled}
+  swagger-ui:
+    enabled: ${railtime.docs.enabled}
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+  paths-to-match: /api/**,/public/**
+  default-produces-media-type: application/json

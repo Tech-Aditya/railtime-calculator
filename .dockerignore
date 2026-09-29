@@ -1,0 +1,17 @@
+# Build output and local tooling never belong in the build context
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+.claude/
+*.log
+.env
+.env.*
+
+# Docs and container files are not needed to build the JAR
+README.md
+docker-compose.yml
+Dockerfile
+.dockerignore

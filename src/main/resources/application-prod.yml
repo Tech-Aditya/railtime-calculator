@@ -1,0 +1,24 @@
+# Production profile: minimal JSON logs, Swagger off unless API_DOCS_ENABLED=true,
+# proxy-aware, no error detail. Security headers are always on (see SecurityConfig).
+railtime:
+  docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  errors:
+    include-exception-detail: false
+
+server:
+  # Honour X-Forwarded-* from a trusted reverse proxy / load balancer (TLS termination).
+  forward-headers-strategy: framework
+  tomcat:
+    threads:
+      max: ${SERVER_MAX_THREADS:100}
+    connection-timeout: 10s
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: WARN
+    com.example.railtime: INFO
+    org.springframework.boot.web.embedded: INFO

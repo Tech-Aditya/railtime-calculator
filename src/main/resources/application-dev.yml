@@ -1,0 +1,29 @@
+# Development profile: verbose logging, Swagger on, live template/asset reload.
+spring:
+  thymeleaf:
+    cache: false
+  web:
+    resources:
+      chain:
+        cache: false
+      cache:
+        cachecontrol:
+          max-age: 0
+
+railtime:
+  docs:
+    enabled: ${API_DOCS_ENABLED:true}
+  errors:
+    include-exception-detail: true
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.example.railtime: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web: INFO

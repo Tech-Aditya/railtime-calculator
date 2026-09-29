@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title th:text="#{error.title}">Page unavailable · RailTime Calculator</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <script th:src="@{/js/theme.js}"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="container error-page">
+    <div class="calc-card">
+        <p class="eyebrow" th:text="${status} ?: #{error.eyebrow}">404</p>
+        <h1 th:text="#{error.heading}">This stop isn’t on the route.</h1>
+        <p class="card-desc" th:text="#{error.text}">The page you requested isn’t available.</p>
+        <a class="btn btn-primary" th:href="@{/}" th:text="#{error.back}">Back to RailTime Calculator</a>
+    </div>
+</main>
+</body>
+</html>

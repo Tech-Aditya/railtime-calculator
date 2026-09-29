@@ -1,0 +1,12 @@
+target/
+*.log
+.idea/
+*.iml
+.vscode/
+.DS_Store
+.env
+.env.*
+
+# Local AI-assistant / tooling state
+.junie/
+.claude/
