@@ -503,7 +503,7 @@ On Render:
 * **Port.** Render injects `PORT` and the app binds to it (`server.port=${PORT:8080}`).
 * **Links.** Canonical and share links use Render's `RENDER_EXTERNAL_URL` automatically. Set `SITE_URL` only for a custom domain.
 * **Logs.** Output is structured ECS JSON on the console (the `prod` profile), which Render's log view shows as is.
-* **Deploys.** Only changes to `src/`, `pom.xml`, `Dockerfile` or `.dockerignore` trigger a rebuild (`buildFilter`), so README or CI edits don't redeploy. Render waits for readiness before switching traffic. Graceful shutdown finishes in-flight requests (up to `SHUTDOWN_TIMEOUT`, within `maxShutdownDelaySeconds: 30`). The app is stateless, so any instance can serve any request.
+* **Deploys.** Only changes to `src/`, `pom.xml`, `Dockerfile` or `.dockerignore` trigger a rebuild (`buildFilter`), so README or CI edits don't redeploy. Render waits for readiness before switching traffic. Graceful shutdown finishes in-flight requests (up to `SHUTDOWN_TIMEOUT`, 20 s, within Render's default shutdown delay; on a paid plan you can set `maxShutdownDelaySeconds` in `render.yaml`). The app is stateless, so any instance can serve any request.
 * **Memory.** The JVM heap is capped at 65% of the container limit, leaving room for metaspace and the code cache within the 512 MB of the free and starter plans.
 * **Free plan.** Instances sleep after about 15 minutes without traffic. The AOT cache keeps the cold start short. To avoid it entirely, use a paid plan, or point an uptime monitor at `/public/health` (GET and HEAD are both allowed).
 

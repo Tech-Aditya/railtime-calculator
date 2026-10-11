@@ -12,8 +12,8 @@ services:
     autoDeploy: true
     # Ready only once the Spring context is up; Render waits for this before switching traffic.
     healthCheckPath: /actuator/health/readiness
-    # Time Render waits after SIGTERM before killing the old instance; covers SHUTDOWN_TIMEOUT (20s).
-    maxShutdownDelaySeconds: 30
+    # On a paid plan you can add `maxShutdownDelaySeconds: 30` (time Render waits after SIGTERM).
+    # The free plan doesn't accept it; Render's default delay already covers SHUTDOWN_TIMEOUT (20s).
     # Rebuild only when something that goes into the image changes (not for README or CI edits).
     buildFilter:
       paths:
