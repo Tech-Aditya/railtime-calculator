@@ -71,12 +71,31 @@ class WebPageTest {
                 .contains("data-endpoint=\"/api/v1/booking/chart/calculate\"")
                 .contains("data-window-endpoint=\"/api/v1/booking/window\"")
                 .contains("<option value=\"CONFIRMED_TATKAL\">Confirmed Tatkal</option>")
-                .contains("Departs 05:00 AM – 02:00 PM")
-                .contains("<strong>09:00 PM</strong> the previous day")
-                .contains("<strong>8 hours</strong> before departure")
+                .contains("Departs 05:01 AM – 02:00 PM")
+                .contains("<strong>08:00 PM</strong> the previous day")
+                .contains("<strong>10 hours</strong> before departure")
                 .contains("<strong>30 minutes</strong> before departure")
                 .contains("pay ₹60 clerkage per passenger")
+                // Refund context card and rules page follow the 2026 slabs.
+                .contains("More than 72 h before", "72 to 24 h", "24 to 8 h", "Within 8 h")
+                .contains("<option value=\"VANDE_BHARAT_SLEEPER\">Vande Bharat Sleeper</option>")
+                .contains("Vande Bharat Sleeper / Amrit Bharat II: 25% of fare more than 72 h before")
+                .contains("only Aadhaar-authenticated IRCTC users can book general reserved tickets online")
+                .contains("Authorised agents cannot book in the first 30 minutes")
                 .contains("https://contents.irctc.co.in/en/eticketCancel.html");
+    }
+
+    @Test
+    void phonesGetABottomTabBarAndTheFooterCreditsTheAuthor() throws Exception {
+        String html = mvc.perform(get("/refund")).andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .contains("<nav class=\"bottom-nav\" aria-label=\"Sections\">")
+                .containsSubsequence("class=\"bn-link\"", "data-nav=\"dashboard\"", ">Home<",
+                        "data-nav=\"general\"", "data-nav=\"tatkal\"", "data-nav=\"refund\" aria-current=\"page\"",
+                        "data-nav=\"chart\"", "bn-more", ">More<")
+                .contains("viewport-fit=cover")
+                .contains("Crafted with", "class=\"footer-author\"", "src=\"/images/aditya.png\"");
     }
 
     @Test
@@ -133,7 +152,8 @@ class WebPageTest {
         String viewTag = html.replaceAll("(?s).*(<section class=\"view[^\"]*\" data-view=\"" + key + "\"[^>]*>).*", "$1");
         assertThat(viewTag).startsWith("<section").doesNotContain("hidden");
         assertThat(html.split("data-view=\"[a-z]+\"[^>]*hidden=\"hidden\"", -1)).hasSize(8);
-        assertThat(html.split("aria-current=\"page\"", -1)).hasSizeLessThanOrEqualTo(3); // sidebar (+ calculator tab)
+        // Sidebar, plus the calculator tab and the phone tab bar on calculator pages.
+        assertThat(html.split("aria-current=\"page\"", -1)).hasSizeLessThanOrEqualTo(4);
     }
 
     @ParameterizedTest(name = "{0}: calculator in the {1} slot")

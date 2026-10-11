@@ -55,14 +55,49 @@ class PlanningApiIntegrationTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.travelClass").value("3A"))
                 .andExpect(jsonPath("$.travelClassName").value("Third AC"))
-                .andExpect(jsonPath("$.slab").value("FLAT_CHARGE"))
+                .andExpect(jsonPath("$.trainType").value("STANDARD"))
+                .andExpect(jsonPath("$.ruleSet").value("STANDARD_2026"))
+                .andExpect(jsonPath("$.slab").value("QUARTER_OF_FARE"))
                 .andExpect(jsonPath("$.refundable").value(true))
                 .andExpect(jsonPath("$.minutesBeforeDeparture").value(3390))
-                .andExpect(jsonPath("$.totalCharge").value(360.0))
-                .andExpect(jsonPath("$.totalGst").value(18.0))
-                .andExpect(jsonPath("$.totalRefund").value(2072.0))
+                .andExpect(jsonPath("$.totalCharge").value(612.5))
+                .andExpect(jsonPath("$.totalGst").value(30.62))
+                .andExpect(jsonPath("$.totalRefund").value(1806.88))
                 .andExpect(jsonPath("$.departureDateTime").value("2026-12-20T18:30:00+05:30"))
-                .andExpect(jsonPath("$.notes[0]").value(containsString("Rules, 2015")));
+                .andExpect(jsonPath("$.notes[0]").value(containsString("revised in April 2026")));
+    }
+
+    @Test
+    void premiumSleeperTrainsUseTheirOwnScale() throws Exception {
+        postJson(CANCELLATION, """
+                {"travelClass":"3A","ticketStatus":"CONFIRMED","totalFare":3000,"passengers":1,"trainType":"VANDE_BHARAT_SLEEPER",
+                 "departureDate":"2026-12-20","departureTime":"18:30","cancellationDate":"2026-12-10","cancellationTime":"10:00"}""")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.trainType").value("VANDE_BHARAT_SLEEPER"))
+                .andExpect(jsonPath("$.ruleSet").value("PREMIUM_SLEEPER_2026"))
+                .andExpect(jsonPath("$.slab").value("QUARTER_OF_FARE"))
+                .andExpect(jsonPath("$.totalRefund").value(2212.5));
+    }
+
+    @Test
+    void racOnVandeBharatSleeperIsRejectedAgainstTheField() throws Exception {
+        postJson(CANCELLATION, """
+                {"travelClass":"3A","ticketStatus":"RAC","totalFare":3000,"passengers":1,"trainType":"VANDE_BHARAT_SLEEPER",
+                 "departureDate":"2026-12-20","departureTime":"18:30"}""")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value(containsString("do not have RAC")))
+                .andExpect(jsonPath("$.details[0].field").value("ticketStatus"));
+    }
+
+    @Test
+    void unknownTrainTypeListsTheAllowedValues() throws Exception {
+        postJson(CANCELLATION, """
+                {"travelClass":"SL","ticketStatus":"CONFIRMED","totalFare":500,"passengers":1,"trainType":"BULLET",
+                 "departureDate":"2026-12-20","departureTime":"18:30"}""")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details[0].field").value("trainType"))
+                .andExpect(jsonPath("$.message").value(containsString("STANDARD, VANDE_BHARAT_SLEEPER, AMRIT_BHARAT_II")));
     }
 
     @Test
@@ -128,10 +163,10 @@ class PlanningApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.rule").value("PREVIOUS_EVENING"))
-                .andExpect(jsonPath("$.firstChartAt").value("2026-12-19T21:00:00+05:30"))
+                .andExpect(jsonPath("$.firstChartAt").value("2026-12-19T20:00:00+05:30"))
                 .andExpect(jsonPath("$.finalChartAt").value("2026-12-20T10:00:00+05:30"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
-                .andExpect(jsonPath("$.display.firstChartTime").value("09:00 PM IST"));
+                .andExpect(jsonPath("$.display.firstChartTime").value("08:00 PM IST"));
     }
 
     @Test

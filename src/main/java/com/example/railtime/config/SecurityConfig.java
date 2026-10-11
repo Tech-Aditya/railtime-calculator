@@ -11,6 +11,8 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.web.cors.CorsConfiguration;
@@ -100,6 +102,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiPaths.PUBLIC + "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiPaths.USAGE).permitAll()
                         .requestMatchers(HttpMethod.GET, ACTUATOR_PUBLIC).permitAll()
+                        // HEAD wherever pages and health are public: uptime monitors (often used to keep a
+                        // free Render instance awake) probe with HEAD; MVC answers it from the GET handler.
+                        .requestMatchers(HttpMethod.HEAD, Page.PATHS).permitAll()
+                        .requestMatchers(HttpMethod.HEAD, ApiPaths.PUBLIC + "/**").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, ACTUATOR_PUBLIC).permitAll()
                         // Public calculator API. The MVC layer enforces methods (405) and paths (404).
                         .requestMatchers(ApiPaths.BOOKING + "/**").permitAll()
                         .anyRequest().denyAll())
@@ -107,6 +114,15 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .headers(headers -> headers.contentSecurityPolicy(csp -> csp.policyDirectives(APP_CSP)));
         return applyCommon(http).build();
+    }
+
+    /**
+     * The app has no user accounts. An empty store stops Spring Boot from creating a default user
+     * with a generated password (and logging that password at startup).
+     */
+    @Bean
+    UserDetailsService noUserAccounts() {
+        return new InMemoryUserDetailsManager();
     }
 
     @Bean

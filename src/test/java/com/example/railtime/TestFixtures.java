@@ -42,14 +42,33 @@ public final class TestFixtures {
         return new BookingRulesProperties(
                 IST,
                 new BookingRulesProperties.General(arpDays, LocalTime.of(8, 0)),
-                new BookingRulesProperties.Tatkal(1, LocalTime.of(10, 0), LocalTime.of(11, 0)),
+                new BookingRulesProperties.Tatkal(1, LocalTime.of(10, 0), LocalTime.of(11, 0), 30),
                 new BookingRulesProperties.Validation(365, 730),
                 cancellationRules(),
                 chartRules());
     }
 
-    /** The published 2015 cancellation rules (flat charges, 25% / 50% slabs, ₹60 clerkage, 5% GST on AC / FC). */
+    /** Cancellations on or after this date use the 2026 slabs (72 / 24 / 8 h). */
+    public static final LocalDate REFUND_RULES_REVISED_FROM = LocalDate.of(2026, 4, 1);
+
+    /**
+     * The cancellation rules as amended in 2026: flat charges, 25% / 50% slabs (72 / 24 / 8 h; the original
+     * 48 / 12 / 4 h before 1 Apr 2026), ₹60 clerkage, 5% GST on AC / FC, and the premium-sleeper scale.
+     */
     public static BookingRulesProperties.Cancellation cancellationRules() {
+        return cancellationRules(flatCharges());
+    }
+
+    public static BookingRulesProperties.Cancellation cancellationRules(Map<String, BigDecimal> flatCharges) {
+        return new BookingRulesProperties.Cancellation(flatCharges, new BigDecimal("60"), new BigDecimal("5"),
+                Set.of("1A", "EC", "2A", "FC", "3A", "CC", "3E"), new BigDecimal("25"), new BigDecimal("50"), 30,
+                REFUND_RULES_REVISED_FROM,
+                new BookingRulesProperties.Slabs(72, 24, 8),
+                new BookingRulesProperties.Slabs(48, 12, 4),
+                new BookingRulesProperties.PremiumSleeper(72, new BigDecimal("25"), new BigDecimal("50"), 8));
+    }
+
+    public static Map<String, BigDecimal> flatCharges() {
         Map<String, BigDecimal> flat = new LinkedHashMap<>();
         flat.put("1A", new BigDecimal("240"));
         flat.put("EC", new BigDecimal("240"));
@@ -60,13 +79,12 @@ public final class TestFixtures {
         flat.put("3E", new BigDecimal("180"));
         flat.put("SL", new BigDecimal("120"));
         flat.put("2S", new BigDecimal("60"));
-        return new BookingRulesProperties.Cancellation(flat, new BigDecimal("60"), new BigDecimal("5"),
-                Set.of("1A", "EC", "2A", "FC", "3A", "CC", "3E"), 48, 12, new BigDecimal("25"), new BigDecimal("50"), 4, 30);
+        return flat;
     }
 
-    /** Charting per the Railway Board directive effective 10 July 2025. */
+    /** Charting per the Railway Board letter of 16 December 2025. */
     public static BookingRulesProperties.Chart chartRules() {
-        return new BookingRulesProperties.Chart(8, LocalTime.of(5, 0), LocalTime.of(14, 0), LocalTime.of(21, 0), 30,
-                LocalDate.of(2025, 7, 10));
+        return new BookingRulesProperties.Chart(10, LocalTime.of(5, 1), LocalTime.of(14, 0), LocalTime.of(20, 0), 30,
+                LocalDate.of(2025, 12, 16));
     }
 }

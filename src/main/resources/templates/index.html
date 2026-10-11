@@ -2,7 +2,7 @@
 <html th:lang="${lang.code()}" lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title th:text="${page.name() == 'DASHBOARD'} ? #{meta.title} : #{page.docTitle(#{${'nav.' + page.key()}})}">IRCTC Ticket Booking Date Calculator</title>
     <meta name="description" th:content="${page.name() == 'DASHBOARD'} ? #{meta.description} : #{${'page.' + page.key() + '.desc'}}">
     <meta name="robots" content="index, follow">
@@ -298,6 +298,7 @@
                             <li th:utext="#{context.general.arp(${arpDays})}">Booking opens <strong>60 days</strong> before the journey date, not counting the journey date.</li>
                             <li th:utext="#{context.general.time(${generalOpeningTime})}">Online booking opens at <strong>08:00 AM IST</strong>.</li>
                             <li th:text="#{context.general.shorter}">Some trains have a shorter booking period.</li>
+                            <li th:text="#{context.general.aadhaar}">On the opening day, only Aadhaar-verified IRCTC users can book online until midnight.</li>
                         </ul>
                     </aside>
                 </div>
@@ -368,6 +369,7 @@
                                 <dd th:text="#{js.time.withZone(${tatkalNonAcTime})}">11:00 AM IST</dd>
                             </div>
                         </dl>
+                        <p class="context-note" th:text="#{context.tatkal.aadhaar(${tatkalAgentMinutes})}">Online Tatkal needs an Aadhaar-verified IRCTC account and an OTP. Agents cannot book in the first 30 minutes.</p>
                         <p class="context-note" th:text="#{info.firstAc}">1A is not listed under the standard Tatkal classes, so no Tatkal time is calculated for it.</p>
                     </aside>
                 </div>
@@ -397,6 +399,19 @@
                         </header>
                         <form id="refund-form" class="calc-form" novalidate autocomplete="off" data-kind="refund"
                               th:data-endpoint="@{/api/v1/booking/cancellation/calculate}">
+                            <div class="field-row">
+                                <div class="field">
+                                    <label for="refund-train" th:text="#{field.trainType}">Train type</label>
+                                    <div class="select-wrap">
+                                        <select id="refund-train" name="trainType" aria-describedby="refund-train-help refund-train-error">
+                                            <option th:each="tt : ${ {'STANDARD', 'VANDE_BHARAT_SLEEPER', 'AMRIT_BHARAT_II'} }"
+                                                    th:value="${tt}" th:text="#{${'js.train.' + tt}}" th:selected="${tt == 'STANDARD'}">All other trains</option>
+                                        </select>
+                                    </div>
+                                    <p class="field-help" id="refund-train-help" th:text="#{help.trainType}">Vande Bharat Sleeper and Amrit Bharat II have their own refund scale.</p>
+                                    <p class="field-error" id="refund-train-error" role="alert"></p>
+                                </div>
+                            </div>
                             <div class="field-row field-row-pair">
                                 <div class="field">
                                     <label for="refund-class" th:text="#{field.travelClass}">Travel class</label>
@@ -475,11 +490,11 @@
                             </div>
                         </form>
                     </article>
-                    <aside class="context-card" th:aria-label="#{context.aria}" th:with="r=${refundRules}">
+                    <aside class="context-card" th:aria-label="#{context.aria}" th:with="r=${refundSlabs}, p=${refundPremium}">
                         <p class="context-title" th:text="#{context.refund.title}">Confirmed tickets: charge per passenger</p>
                         <dl class="context-steps">
                             <div>
-                                <dt th:text="#{context.refund.flatWhen(${r.flatChargeAboveHours()})}">More than 48 h before</dt>
+                                <dt th:text="#{context.refund.flatWhen(${r.flatChargeAboveHours()})}">More than 72 h before</dt>
                                 <dd>
                                     <span th:text="#{context.refund.flat}">Flat charge</span>
                                     <span class="charge-chips">
@@ -488,19 +503,20 @@
                                 </dd>
                             </div>
                             <div>
-                                <dt th:text="#{context.refund.range(${r.flatChargeAboveHours()}, ${r.quarterChargeFromHours()})}">48 to 12 h</dt>
+                                <dt th:text="#{context.refund.range(${r.flatChargeAboveHours()}, ${r.quarterChargeFromHours()})}">72 to 24 h</dt>
                                 <dd th:text="#{context.refund.percent(${refundQuarterRate})}">25% of fare, at least the flat charge</dd>
                             </div>
                             <div>
-                                <dt th:text="#{context.refund.range(${r.quarterChargeFromHours()}, ${r.confirmedCutoffHours()})}">12 to 4 h</dt>
+                                <dt th:text="#{context.refund.range(${r.quarterChargeFromHours()}, ${r.confirmedCutoffHours()})}">24 to 8 h</dt>
                                 <dd th:text="#{context.refund.percent(${refundHalfRate})}">50% of fare, at least the flat charge</dd>
                             </div>
                             <div>
-                                <dt th:text="#{context.refund.within(${r.confirmedCutoffHours()})}">Within 4 h</dt>
+                                <dt th:text="#{context.refund.within(${r.confirmedCutoffHours()})}">Within 8 h</dt>
                                 <dd th:text="#{js.refund.pill.none}">No refund</dd>
                             </div>
                         </dl>
-                        <p class="context-note" th:text="#{context.refund.other(${clerkage}, ${r.racWaitlistCutoffMinutes()})}">Confirmed Tatkal: no refund. RAC / waitlisted: ₹60 clerkage up to 30 minutes before departure.</p>
+                        <p class="context-note" th:text="#{context.refund.other(${clerkage}, ${refundRules.racWaitlistCutoffMinutes()})}">Confirmed Tatkal: no refund. RAC / waitlisted: ₹60 clerkage up to 30 minutes before departure.</p>
+                        <p class="context-note" th:text="#{context.refund.premium(${p.earlyAboveHours()}, ${refundPremiumEarlyRate}, ${refundPremiumLateRate}, ${p.cutoffHours()})}">Vande Bharat Sleeper / Amrit Bharat II: 25% of fare more than 72 h before, 50% from 72 to 8 h, no refund within 8 h.</p>
                     </aside>
                 </div>
                 <div class="result-region" id="result-refund" aria-live="polite" aria-atomic="true"></div>
@@ -555,13 +571,13 @@
                         <ol class="rule-steps">
                             <li>
                                 <span class="rl-step">1</span>
-                                <span><span class="rl-when" th:text="#{chart.rule1When(${chartBandStart}, ${chartBandEnd})}">Departs 05:00 AM – 02:00 PM</span>
-                                <span th:utext="#{chart.rule1(${chartPreviousDayTime})}">First chart by <strong>09:00 PM</strong> the previous day</span></span>
+                                <span><span class="rl-when" th:text="#{chart.rule1When(${chartBandStart}, ${chartBandEnd})}">Departs 05:01 AM – 02:00 PM</span>
+                                <span th:utext="#{chart.rule1(${chartPreviousDayTime})}">First chart by <strong>08:00 PM</strong> the previous day</span></span>
                             </li>
                             <li>
                                 <span class="rl-step">2</span>
                                 <span><span class="rl-when" th:text="#{chart.rule2When}">All other departures</span>
-                                <span th:utext="#{chart.rule2(${chartHoursBefore})}">First chart <strong>8 hours</strong> before departure</span></span>
+                                <span th:utext="#{chart.rule2(${chartHoursBefore})}">First chart <strong>10 hours</strong> before departure</span></span>
                             </li>
                             <li>
                                 <span class="rl-step">3</span>
@@ -640,15 +656,19 @@
                     <ul th:fragment="rulesList" class="rules-list">
                         <li th:utext="#{info.origin}">Opening dates are calculated from the train’s originating-station departure date.</li>
                         <li th:text="#{info.arp(${arpDays}, ${generalOpeningTime})}">The standard advance reservation period is 60 days.</li>
+                        <li th:text="#{info.aadhaar(${generalOpeningTime})}">On the opening day, only Aadhaar-authenticated users can book online until midnight.</li>
                         <li th:text="#{info.tatkal(${tatkalDaysBefore}, ${tatkalAcTime}, ${tatkalNonAcTime})}">Tatkal opens one day before the origin departure date.</li>
+                        <li th:text="#{info.tatkalAadhaar(${tatkalAgentMinutes})}">Online Tatkal needs Aadhaar authentication and an OTP.</li>
                         <li th:text="#{info.firstAc}">1A is not listed under the standard Tatkal classes.</li>
-                        <li th:text="#{info.refund(${clerkage})}">Refunds follow the 2015 refund rules.</li>
-                        <li th:text="#{info.chart}">First charts follow the Railway Board directive of July 2025.</li>
+                        <li th:with="r=${refundSlabs}" th:text="#{info.refund(${r.flatChargeAboveHours()}, ${r.quarterChargeFromHours()}, ${r.confirmedCutoffHours()}, ${clerkage})}">Refunds follow the 2026 refund slabs.</li>
+                        <li th:with="p=${refundPremium}" th:text="#{info.refundPremium(${p.earlyAboveHours()}, ${refundPremiumEarlyRate}, ${refundPremiumLateRate}, ${p.cutoffHours()})}">Vande Bharat Sleeper and Amrit Bharat II have their own refund scale.</li>
+                        <li th:text="#{info.chart(${chartBandStart}, ${chartBandEnd}, ${chartPreviousDayTime}, ${chartHoursBefore})}">First charts follow the Railway Board letter of December 2025.</li>
                     </ul>
                     <p class="sources"><span th:text="#{info.sources}">Sources:</span>
                         <a href="https://contents.irctc.co.in/en/eticketCancel.html" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.irctc}">IRCTC cancellation rules</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>,
-                        <a href="https://www.pib.gov.in/PressReleasePage.aspx?PRID=1527662&amp;reg=48&amp;lang=2" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.pib}">PIB refund rules</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>,
-                        <a href="https://cr.indianrailways.gov.in/view_detail.jsp?lang=0&amp;dcd=9856&amp;id=0%2C4%2C268" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.cr}">Central Railway charting notice</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>.
+                        <a href="https://www.newsonair.gov.in/railways-minister-ashwini-vaishnaw-launches-five-reforms-in-railways-52-reforms-in-52-weeks-drive" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.refund2026}">2026 refund slabs (All India Radio)</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>,
+                        <a href="https://www.indianrailwayrules.com/wp-content/uploads/2026/03/Introduction-of-Vande-Bharat-Sleeper-and-Amrit-Bharat-II-with-rationalised-refund-provision-Commercial-Circular-No.-08-of-2026-19.01.2026-indianrailwayrules.com_.pdf" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.premium}">Commercial Circular 08 of 2026</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>,
+                        <a href="https://www.newsonair.gov.in/railways-to-allow-general-ticket-booking-online-only-for-aadhaar-verified-users-during-first-15-minutes-from-next-month" target="_blank" rel="noopener noreferrer"><span th:text="#{info.src.aadhaar}">Aadhaar booking rule (All India Radio)</span><span class="sr-only" th:text="#{newTab}"> (opens in a new tab)</span></a>.
                     </p>
                     <p class="disclaimer" th:utext="#{info.disclaimer}">RailTime is an independent informational tool and is not affiliated with or operated by IRCTC or Indian Railways.</p>
                 </div>
@@ -658,9 +678,33 @@
         <footer class="site-footer">
             <p class="footer-note" th:text="#{footer.note}">Independent informational tool. Not affiliated with IRCTC or Indian Railways.</p>
             <p class="footer-copy">© 2026 RailTime</p>
+            <p class="footer-credit">
+                <span th:text="#{footer.craftedWith}">Crafted with</span>
+                <span class="footer-heart" role="img" th:aria-label="#{footer.love}">♥</span>
+                <span th:text="#{footer.by}">by</span>
+                <span class="footer-author">
+                    <img th:src="@{/images/aditya.png}" alt="" width="30" height="30" loading="lazy" decoding="async">
+                    Aditya
+                </span>
+            </p>
         </footer>
     </div>
 </div>
+
+<!-- Bottom tab bar (phones only): one tap to any calculator; "More" opens the drawer with the other pages. -->
+<nav class="bottom-nav" th:aria-label="#{bottomNav.aria}">
+    <a th:each="p : ${pages}" th:if="${p.name() == 'DASHBOARD' or p.isCalculator()}" class="bn-link"
+       th:classappend="${p.kind() != null} ? ${'kind-' + p.kind()}"
+       th:href="@{${p.path()}}" th:data-nav="${p.key()}" th:attr="aria-current=${p == page} ? 'page' : null">
+        <svg class="icon" aria-hidden="true"><use th:href="${'#i-' + p.icon()}"/></svg>
+        <span th:text="${p.name() == 'DASHBOARD'} ? #{bottomNav.home} : #{${'tabs.' + p.key()}}">Home</span>
+    </a>
+    <button type="button" class="bn-link bn-more" aria-controls="sidebar" aria-haspopup="dialog"
+            th:classappend="${!(page.name() == 'DASHBOARD' or page.isCalculator())} ? 'is-active'">
+        <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+        <span th:text="#{bottomNav.more}">More</span>
+    </button>
+</nav>
 
 <!-- Result templates: filled with textContent only (no HTML injection). -->
 <template id="tpl-result">

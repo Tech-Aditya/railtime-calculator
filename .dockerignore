@@ -11,6 +11,10 @@ build/
 *.iml
 .claude/
 .junie/
+.github/
+.mvn/
+mvnw
+mvnw.cmd
 logs/
 *.log
 

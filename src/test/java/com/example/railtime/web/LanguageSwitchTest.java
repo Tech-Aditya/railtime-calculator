@@ -62,7 +62,7 @@ class LanguageSwitchTest {
                 .contains("60 दिन की बुकिंग अवधि", "तत्काल खुलने का समय", "रिफ़ंड कैलकुलेटर", "चार्ट बनने का समय")
                 .contains("<option value=\"SL\" selected=\"selected\">स्लीपर (SL)</option>")
                 .contains("<option value=\"CONFIRMED\" selected=\"selected\">कन्फ़र्म</option>")
-                .contains("पहला चार्ट पिछले दिन <strong>09:00 PM</strong> तक")
+                .contains("पहला चार्ट पिछले दिन <strong>08:00 PM</strong> तक")
                 .contains("प्रति यात्री ₹60 क्लर्केज")
                 .contains("Noto+Sans+Devanagari")
                 .contains("<meta property=\"og:locale\" content=\"hi_IN\">")
@@ -145,7 +145,13 @@ class LanguageSwitchTest {
         assertThat(data.get("messages").get("refund.rule.FLAT_CHARGE").asString()).contains("{0}", "{1}");
         assertThat(data.get("rules").get("refund").get("flatCharges").get("3A").asString()).isEqualTo("180");
         assertThat(data.get("rules").get("refund").get("gstClasses").toString()).contains("\"3A\"").doesNotContain("\"SL\"");
-        assertThat(data.get("rules").get("chart").get("effectiveFrom").asString()).isEqualTo("2025-07-10");
+        JsonNode ruleSets = data.get("rules").get("refund").get("ruleSets");
+        assertThat(ruleSets.get("STANDARD_2026").get("flatAboveHours").asInt()).isEqualTo(72);
+        assertThat(ruleSets.get("STANDARD_2015").get("cutoffHours").asInt()).isEqualTo(4);
+        assertThat(ruleSets.get("PREMIUM_SLEEPER_2026").get("quarterRatePercent").asString()).isEqualTo("25");
+        assertThat(data.get("rules").get("refund").get("revisedFrom").asString()).isEqualTo("2026-04-01");
+        assertThat(data.get("messages").get("refund.note.source.PREMIUM_SLEEPER_2026").asString()).contains("वंदे भारत");
+        assertThat(data.get("rules").get("chart").get("effectiveFrom").asString()).isEqualTo("2025-12-16");
         assertThat(json).doesNotContain("<", ">");
     }
 }

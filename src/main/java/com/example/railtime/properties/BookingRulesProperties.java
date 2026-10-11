@@ -52,11 +52,13 @@ public record BookingRulesProperties(
      *                            (the journey date itself excluded)
      * @param acOpeningTime       opening time (IST) for AC Tatkal classes
      * @param nonAcOpeningTime    opening time (IST) for non-AC Tatkal classes
+     * @param agentBlackoutMinutes authorised agents may not book in this many first minutes of the window
      */
     public record Tatkal(
             @Min(1) @Max(7) int daysBeforeDeparture,
             @NotNull LocalTime acOpeningTime,
-            @NotNull LocalTime nonAcOpeningTime) {
+            @NotNull LocalTime nonAcOpeningTime,
+            @Min(0) @Max(120) int agentBlackoutMinutes) {
     }
 
     /**
@@ -69,40 +71,75 @@ public record BookingRulesProperties(
     }
 
     /**
-     * Cancellation charges per the Railway Passengers (Cancellation of Tickets and Refund of Fares)
-     * Rules, 2015, as published by IRCTC. All hour limits are measured before the scheduled departure.
+     * Cancellation charges per the Railway Passengers (Cancellation of Ticket and Refund of Fare)
+     * Rules, 2015, as amended in 2026. All hour limits are measured before the scheduled departure.
      *
-     * @param flatCharges             minimum charge per passenger for a confirmed ticket, keyed by class code
-     * @param clerkage                charge per passenger for cancelling an RAC or waitlisted ticket
-     * @param gstRatePercent          GST levied on the cancellation charge / clerkage for {@code gstClasses}
-     * @param gstClasses              class codes on which GST applies (AC classes and First Class)
-     * @param flatChargeAboveHours    more than this many hours before departure: flat charge only (48)
-     * @param quarterChargeFromHours  from this many hours up to the above: 25% slab (12)
-     * @param quarterRatePercent      percentage of fare in the first slab (25)
-     * @param halfRatePercent         percentage of fare in the second slab (50)
-     * @param confirmedCutoffHours    confirmed tickets: no refund within this many hours (4)
+     * <p>Standard trains use {@code current} for cancellations on or after {@code revisedFrom}
+     * (72 h / 24 h / 8 h) and {@code previous} before it (the original 48 h / 12 h / 4 h).
+     * Vande Bharat Sleeper and Amrit Bharat II use {@code premiumSleeper}.
+     *
+     * @param flatCharges              minimum charge per passenger for a confirmed ticket, keyed by class code
+     * @param clerkage                 charge per passenger for cancelling an RAC or waitlisted ticket
+     * @param gstRatePercent           GST levied on the cancellation charge / clerkage for {@code gstClasses}
+     * @param gstClasses               class codes on which GST applies (AC classes and First Class)
+     * @param quarterRatePercent       percentage of fare in the first percentage slab (25)
+     * @param halfRatePercent          percentage of fare in the second percentage slab (50)
      * @param racWaitlistCutoffMinutes RAC / waitlisted tickets: no refund within this many minutes (30)
+     * @param revisedFrom              first cancellation date (IST) on which {@code current} applies
+     * @param current                  standard-train slabs from {@code revisedFrom}
+     * @param previous                 standard-train slabs before {@code revisedFrom}
+     * @param premiumSleeper           Vande Bharat Sleeper / Amrit Bharat II scale
      */
     public record Cancellation(
             @NotEmpty Map<String, BigDecimal> flatCharges,
             @NotNull @PositiveOrZero BigDecimal clerkage,
             @NotNull @PositiveOrZero BigDecimal gstRatePercent,
             @NotNull Set<String> gstClasses,
-            @Min(1) int flatChargeAboveHours,
-            @Min(1) int quarterChargeFromHours,
             @NotNull @Positive BigDecimal quarterRatePercent,
             @NotNull @Positive BigDecimal halfRatePercent,
-            @Min(0) int confirmedCutoffHours,
-            @Min(0) int racWaitlistCutoffMinutes) {
+            @Min(0) int racWaitlistCutoffMinutes,
+            @NotNull LocalDate revisedFrom,
+            @NotNull @Valid Slabs current,
+            @NotNull @Valid Slabs previous,
+            @NotNull @Valid PremiumSleeper premiumSleeper) {
     }
 
     /**
-     * Reservation chart timings per the Railway Board directive effective 10 July 2025.
+     * Standard-train time slabs for confirmed tickets.
      *
-     * @param firstChartHoursBefore   first chart is prepared this many hours before departure (8)
-     * @param previousDayBandStart    departures from this time (inclusive, 05:00) …
-     * @param previousDayBandEnd      … up to this time (exclusive, 14:00) get the chart the previous evening
-     * @param previousDayChartTime    time of that previous-day chart (21:00)
+     * @param flatChargeAboveHours   more than this many hours before departure: flat charge only
+     * @param quarterChargeFromHours from this many hours up to the above: 25% slab
+     * @param confirmedCutoffHours   from this many hours up to the above: 50% slab; within it, no refund
+     */
+    public record Slabs(
+            @Min(1) int flatChargeAboveHours,
+            @Min(1) int quarterChargeFromHours,
+            @Min(0) int confirmedCutoffHours) {
+    }
+
+    /**
+     * Refund scale for Vande Bharat Sleeper and Amrit Bharat II (G.S.R. 41(E), 16 January 2026):
+     * a percentage of fare only, with no flat minimum.
+     *
+     * @param earlyAboveHours   more than this many hours before departure: {@code earlyRatePercent} (72)
+     * @param earlyRatePercent  charge as a percentage of fare in the early slab (25)
+     * @param lateRatePercent   charge from {@code cutoffHours} up to {@code earlyAboveHours} (50)
+     * @param cutoffHours       within this many hours of departure: no refund (8)
+     */
+    public record PremiumSleeper(
+            @Min(1) int earlyAboveHours,
+            @NotNull @Positive BigDecimal earlyRatePercent,
+            @NotNull @Positive BigDecimal lateRatePercent,
+            @Min(0) int cutoffHours) {
+    }
+
+    /**
+     * Reservation chart timings per the Railway Board letter of 16 December 2025.
+     *
+     * @param firstChartHoursBefore   first chart is prepared this many hours before departure (10)
+     * @param previousDayBandStart    departures from this time (inclusive, 05:01) …
+     * @param previousDayBandEnd      … up to this time (inclusive, 14:00) get the chart the previous evening
+     * @param previousDayChartTime    time of that previous-day chart (20:00)
      * @param finalChartMinutesBefore final chart is prepared this many minutes before departure (30)
      * @param effectiveFrom           date from which these timings apply
      */

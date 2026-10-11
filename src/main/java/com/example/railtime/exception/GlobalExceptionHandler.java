@@ -184,6 +184,11 @@ public class GlobalExceptionHandler {
         return respond(ApiErrorCode.INVALID_DATE, ex.getMessage(), request, List.of());
     }
 
+    @ExceptionHandler(RuleViolationException.class)
+    ResponseEntity<ErrorResponse> handleRuleViolation(RuleViolationException ex, HttpServletRequest request) {
+        return fieldError(ApiErrorCode.VALIDATION_ERROR, ex.field(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(InvalidTravelClassException.class)
     ResponseEntity<ErrorResponse> handleInvalidClass(InvalidTravelClassException ex, HttpServletRequest request) {
         return respond(ApiErrorCode.INVALID_TRAVEL_CLASS, ex.getMessage(), request, List.of());

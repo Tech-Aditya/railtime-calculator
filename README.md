@@ -32,14 +32,15 @@
 |---|---|
 | **General reservation calculator** | Origin departure date → opening date/time (60-day ARP, 08:00 IST), with an optional boarding date. |
 | **Tatkal calculator** | Origin departure date + class → Tatkal opening (10:00 IST AC / 11:00 IST non-AC). |
-| **App layout** | A sidebar (Dashboard · Calculators · Tools · Developer) with a compact header. It collapses to icons (remembered per browser), is icon-only on tablets, and becomes a slide-in drawer on phones. Every page has its own URL (`/`, `/general`, `/tatkal`, `/refund`, `/chart`, `/status`, `/reminders`, `/rules`), so direct links, refresh and back/forward work. |
+| **App layout** | A sidebar (Dashboard · Calculators · Tools · Developer) with a compact header. It collapses to icons (remembered per browser), is icon-only on tablets, and on phones becomes a bottom tab bar (Home · General · Tatkal · Refund · Chart · More, with "More" opening a drawer for the other pages). Every page has its own URL (`/`, `/general`, `/tatkal`, `/refund`, `/chart`, `/status`, `/reminders`, `/rules`), so direct links, refresh and back/forward work. |
 | **Dashboard** | The next booking opening (live countdown), what is bookable today, Tatkal windows, quick links to each calculator and your recent calculations. |
 | **Booking status** | What you can book right now and what opens next, updated live. |
 | **Result actions** | Copy a clean text summary, share it (Web Share API, with copy as the fallback) and, for General/Tatkal, add a calendar reminder. |
 | **Reminders** | The reminders you added, with re-download and remove. Kept only in this browser. |
 | **Usage & traffic** | Anonymous counts on the dashboard: page visits (today, this week, this month, total), successful calculations per calculator, and a 30-day trend. `GET /api/v1/usage` serves them. Counts are kept in memory (the app has no database), so they reset when the server restarts, and the dashboard shows when counting began. Nothing personal is stored: no IP addresses, cookies or user IDs. Crawlers and monitors are not counted. |
-| **Cancellation refund estimate** | Class, ticket status, fare, passengers and departure → charge, GST and refund, per the 2015 refund rules. |
-| **Chart preparation time** | Departure date/time → first chart and final chart times, per the July 2025 Railway Board directive, with a countdown. |
+| **Cancellation refund estimate** | Train type, class, ticket status, fare, passengers and departure → charge, GST and refund. Uses the refund slabs revised in April 2026 (72 h / 24 h / 8 h), the separate Vande Bharat Sleeper / Amrit Bharat II scale, and the original 2015 slabs for cancellations made before the revision. |
+| **Chart preparation time** | Departure date/time → first chart and final chart times, per the Railway Board letter of 16 December 2025, with a countdown. |
+| **Aadhaar rules in context** | Opening-day ARP booking (Aadhaar-verified users only until midnight) and the Tatkal Aadhaar OTP / agent restrictions are shown beside the calculators and on the Rules page. |
 | **English and Hindi** | A language switcher in the header translates the whole interface, including results, errors and reminders. See [Languages](#languages). |
 | **Honest 1A handling** | First AC is reported as *not listed under standard Tatkal classes*. The app never invents a time for it. |
 | **Live countdown** | Anchored to the server-computed remaining time, so a wrong browser clock or time zone can't skew it. |
@@ -89,6 +90,8 @@ The subtraction uses `LocalDate.minusDays`, which is real calendar arithmetic. M
 
 ⚠️ **Shorter ARP exceptions.** Some trains, including certain intercity/day trains, may have a shorter ARP. The app does not know train-specific ARPs, so it warns about this on every general result instead of guessing.
 
+**Aadhaar-only opening day.** Since 12 January 2026, on the ARP opening day only Aadhaar-authenticated IRCTC users can book general reserved tickets online, from 08:00 IST until midnight (rolled out from the first 15 minutes on 1 Oct 2025, to 08:00–12:00 on 29 Dec 2025, 08:00–16:00 on 5 Jan 2026, then to midnight). Other users can book from the next day, and counter (PRS) booking is not affected. The opening *time* doesn't change, so the calculation is the same; the rule is shown as a note.
+
 ### Tatkal
 
 * Opens **one day before the train's origin departure date** (journey date excluded).
@@ -99,6 +102,9 @@ The subtraction uses `LocalDate.minusDays`, which is real calendar arithmetic. M
 Origin 20 Dec 2026, SL → 19 Dec 2026, 11:00 AM IST
 Origin 20 Dec 2026, 3A → 19 Dec 2026, 10:00 AM IST
 ```
+
+* Online Tatkal needs an **Aadhaar-authenticated** IRCTC account (since 1 July 2025) and an **Aadhaar OTP** at booking (since 15 July 2025).
+* Authorised agents cannot book in the **first 30 minutes** of each window (10:00–10:30 AC, 11:00–11:30 non-AC); configurable as `booking.tatkal.agent-blackout-minutes`.
 
 ### 1A (First AC) handling
 
@@ -127,26 +133,40 @@ Journey date `J` opens at 08:00 IST on `J − 60`. So from 08:00 onwards, journe
 
 ### Cancellation refund
 
-Railway Passengers (Cancellation of Tickets and Refund of Fares) Rules, 2015, as published by IRCTC. Charges are per passenger. All values live in `booking.cancellation` in `application.yml`.
+Railway Passengers (Cancellation of Ticket and Refund of Fare) Rules, 2015, as amended in 2026. Charges are per passenger. All values live in `booking.cancellation` in `application.yml`. The response says which scale applied in `ruleSet`.
+
+**Standard trains, `STANDARD_2026`** (all trains except the two below; cancellations from 1 April 2026; slabs announced by the Railways Minister on 24 March 2026 and rolled out 1–15 April 2026):
 
 | Ticket | When cancelled | Charge per passenger |
 |---|---|---|
-| Confirmed | More than 48 h before departure | Flat: ₹240 1A/EC, ₹200 2A/FC, ₹180 3A/CC/3E, ₹120 SL, ₹60 2S |
-| Confirmed | 48 h to 12 h | 25% of fare, at least the flat charge |
-| Confirmed | Under 12 h to 4 h | 50% of fare, at least the flat charge |
-| Confirmed | Within 4 h | No refund (TDR only in specific circumstances) |
+| Confirmed | More than 72 h before departure | Flat: ₹240 1A/EC, ₹200 2A/FC, ₹180 3A/CC/3E, ₹120 SL, ₹60 2S |
+| Confirmed | 72 h to 24 h | 25% of fare, at least the flat charge |
+| Confirmed | Under 24 h to 8 h | 50% of fare, at least the flat charge |
+| Confirmed | Within 8 h | No refund |
 | Confirmed Tatkal | Any time | No refund |
 | RAC / waitlisted | Up to 30 min before departure | ₹60 clerkage |
 | RAC / waitlisted | Within 30 min | No refund |
 
-GST at 5% is added to the charge for AC classes and First Class (1A, EC, 2A, FC, 3A, CC, 3E). Charges never exceed the fare. Amounts use `BigDecimal`, rounded half-up to the paisa. IRCTC convenience fees are not refunded, and the response always says it is an estimate.
+**Earlier cancellations, `STANDARD_2015`.** A cancellation dated before `booking.cancellation.revised-from` (default 2026-04-01; env `REFUND_RULES_REVISED_FROM`) uses the original 2015 slabs: flat above 48 h, 25% from 48 h to 12 h, 50% from 12 h to 4 h, then nothing.
+
+**Vande Bharat Sleeper and Amrit Bharat II, `PREMIUM_SLEEPER_2026`** (`trainType` `VANDE_BHARAT_SLEEPER` / `AMRIT_BHARAT_II`; G.S.R. 41(E) of 16 January 2026, Commercial Circular 08 of 2026):
+
+| Ticket | When cancelled | Charge per passenger |
+|---|---|---|
+| Confirmed | More than 72 h before departure | 25% of fare (no flat minimum) |
+| Confirmed | 72 h to 8 h | 50% of fare |
+| Confirmed | Within 8 h | No refund |
+
+Vande Bharat Sleeper has no RAC, so `RAC` with that train type returns `400 VALIDATION_ERROR` on `ticketStatus`. Tatkal and waitlisted tickets follow the common rules above.
+
+On every scale, GST at 5% is added to the charge for AC classes and First Class (1A, EC, 2A, FC, 3A, CC, 3E). Charges never exceed the fare. Amounts use `BigDecimal`, rounded half-up to the paisa. IRCTC convenience fees are not refunded, and the response always says it is an estimate.
 
 ### Reservation chart
 
-Railway Board directive effective 10 July 2025 (values in `booking.chart`):
+Railway Board letter of 16 December 2025, which replaced the July 2025 directive (values in `booking.chart`):
 
-* Departures from 05:00 up to (not including) 14:00: first chart by **21:00 the previous day**.
-* All other departures: first chart **8 hours before** departure. A departure at exactly 14:00 falls in this band.
+* Departures from **05:01 to 14:00** (both inclusive): first chart by **20:00 the previous day**.
+* All other departures (14:01 to 05:00): first chart **10 hours before** departure.
 * Final chart: **30 minutes before** departure.
 
 Status is `PENDING` (with `millisUntilFirstChart`), `FIRST_CHART_PREPARED`, `FINAL_CHART_PREPARED` or `DEPARTED`.
@@ -157,8 +177,9 @@ Status is `PENDING` (with `millisUntilFirstChart`), `FIRST_CHART_PREPARED`, `FIN
 * **Tatkal quota.** Not every train or class carries a Tatkal quota.
 * **Class lists.** The Tatkal class lists follow IRCTC's documented Tatkal classes. Some older Indian Railways material lists fewer AC classes. If IRCTC's list changes, update `TravelClass`.
 * **Refund edge cases.** Partially confirmed tickets, TDR claims, trains cancelled by the railways and counter (PRS) tickets follow extra rules the estimate doesn't model. IRCTC shows the final amount before you cancel.
-* **Charting changes.** Charting times can be revised by Indian Railways. Only the officially published July 2025 directive is used; unconfirmed reports of further changes are not.
-* **Additional conditions.** IRCTC may apply extra conditions to opening-window bookings, such as account or Aadhaar verification. The app mentions this as a note and doesn't model it.
+* **Charting changes.** Charting times can be revised by Indian Railways. The December 2025 Railway Board letter is used; the app adds a note for departures before it took effect.
+* **2026 refund rollout.** The revised standard-train slabs were rolled out between 1 and 15 April 2026. The app switches on 1 April (configurable), so a cancellation in that fortnight may have been charged under either scale.
+* **Aadhaar conditions.** Aadhaar-only booking windows change who can book, not when booking opens, so they are shown as notes and not modelled.
 
 ---
 
@@ -291,7 +312,7 @@ Optional: `"boardingDate": "2026-12-21"`.
  "departureDate":"2026-12-20","departureTime":"18:30","cancellationDate":"2026-12-18","cancellationTime":"10:00"}
 ```
 
-`ticketStatus` is `CONFIRMED`, `CONFIRMED_TATKAL`, `RAC` or `WAITLISTED`. `totalFare` is the total for all passengers (1–6). `cancellationDate` and `cancellationTime` are optional and must be given together; if you leave both out, the current time (IST) is used. The response includes `slab`, `refundable`, per-passenger and total `charge`, `gst` and `totalRefund`, a plain-English `slabDescription` and `notes`. For the example above, the result is a flat ₹180 plus ₹9 GST per passenger, so `totalRefund` is `2072.00`.
+`ticketStatus` is `CONFIRMED`, `CONFIRMED_TATKAL`, `RAC` or `WAITLISTED`. `totalFare` is the IRCTC "Booking Amount" for all passengers (1–6). The optional `trainType` is `STANDARD` (default), `VANDE_BHARAT_SLEEPER` or `AMRIT_BHARAT_II`. `cancellationDate` and `cancellationTime` are optional and must be given together; if you leave both out, the current time (IST) is used. The response includes `trainType`, `ruleSet` (`STANDARD_2026`, `STANDARD_2015` or `PREMIUM_SLEEPER_2026`), `slab`, `refundable`, per-passenger and total `charge`, `gst` and `totalRefund`, a plain-English `slabDescription` and `notes`. The example above is 56½ hours before departure, so 25% of the fare applies: ₹306.25 plus ₹15.31 GST per passenger, and `totalRefund` is `1806.88`.
 
 ### `POST /api/v1/booking/chart/calculate`
 
@@ -299,7 +320,7 @@ Optional: `"boardingDate": "2026-12-21"`.
 {"departureDate":"2026-12-20","departureTime":"10:30"}
 ```
 
-Returns `firstChartAt` (`2026-12-19T21:00:00+05:30`), `finalChartAt` (`2026-12-20T10:00:00+05:30`), `rule`, `status`, `millisUntilFirstChart` (while pending), `display` strings and `notes`.
+Returns `firstChartAt` (`2026-12-19T20:00:00+05:30`), `finalChartAt` (`2026-12-20T10:00:00+05:30`), `rule`, `status`, `millisUntilFirstChart` (while pending), `display` strings and `notes`.
 
 ### `GET /api/v1/booking/window`
 
@@ -363,20 +384,20 @@ curl -s -X POST localhost:8080/api/v1/booking/tatkal/calculate -H 'Content-Type:
 
 ## Running locally
 
-Prerequisites: **JDK 25** and **Maven 3.9+**.
+Prerequisites: **JDK 25**. Maven is not required: the Maven Wrapper (`./mvnw`, or `mvnw.cmd` on Windows) downloads the pinned Maven 3.9.11 on first use.
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
-Then open <http://localhost:8080>. The `dev` profile is active by default.
+Then open <http://localhost:8080>. The `dev` profile is active by default. Once the app is ready, the log prints the dashboard, health and (when enabled) API-docs URLs, using the port actually bound.
 
 | Command | Purpose |
 |---|---|
-| `mvn spring-boot:run` | Run in dev mode (Swagger on, DEBUG logs, template hot reload) |
-| `mvn test` | Run the test suite |
-| `mvn verify` | Tests, JaCoCo report (`target/site/jacoco/index.html`) and coverage gate |
-| `mvn package` | Build `target/railtime-calculator.jar` |
+| `./mvnw spring-boot:run` | Run in dev mode (Swagger on, DEBUG logs, template hot reload) |
+| `./mvnw test` | Run the test suite |
+| `./mvnw verify` | Tests, JaCoCo report (`target/site/jacoco/index.html`) and coverage gate |
+| `./mvnw package` | Build `target/railtime-calculator.jar` |
 | `java -jar target/railtime-calculator.jar --spring.profiles.active=prod` | Run the JAR with the prod profile |
 
 ---
@@ -385,8 +406,8 @@ Then open <http://localhost:8080>. The `dev` profile is active by default.
 
 The multi-stage build has two stages:
 
-1. **build** (`maven:3.9-eclipse-temurin-25`): resolves dependencies into a cached layer, runs the tests, packages the JAR and extracts Spring Boot layers.
-2. **runtime** (`eclipse-temurin:25-jre-alpine`): copies the layers ordered by change frequency, runs as the non-root user `railtime`, has a `HEALTHCHECK` on `/actuator/health/liveness` (on `$PORT`), and uses the `prod` profile by default. The web pages, CSS and JS are packaged inside the JAR, so the image serves the whole app.
+1. **build** (`maven:3.9-eclipse-temurin-25`): resolves dependencies into a cached layer, runs the tests, packages the JAR and extracts it into Spring Boot layers (plain JARs, not nested).
+2. **runtime** (`eclipse-temurin:25-jre-alpine`): copies the layers ordered by change frequency, then does an **AOT cache training run**. Java 25's AOT cache (JEP 483/514/515) starts the Spring context once and records the loaded classes and method profiles into `app.aot`, and the container starts with `-XX:AOTCache=app.aot`. Measured locally, startup drops from 3.4 s to 1.9 s; the saving is larger on Render's small CPUs, which matters because free instances cold-start after sleeping. The image runs as the non-root user `railtime`, has a `HEALTHCHECK` on `/actuator/health/liveness` (on `$PORT`), and uses the `prod` profile by default. The web pages, CSS and JS are packaged inside the JAR, so the image serves the whole app.
 
 ```bash
 docker build -t railtime-calculator .
@@ -449,6 +470,7 @@ These values bind to the validated record `BookingRulesProperties` (`@Configurat
 | `SITE_URL` | `RENDER_EXTERNAL_URL` on Render, else `http://localhost:8080` | Canonical and Open Graph URLs |
 | `CORS_ALLOWED_ORIGINS` | *(empty = same-origin only)* | Comma-separated origins allowed to call `/api/**` |
 | `BOOKING_ARP_DAYS` | `60` | Override the ARP if IRCTC changes it |
+| `REFUND_RULES_REVISED_FROM` | `2026-04-01` | First cancellation date that uses the 2026 refund slabs |
 | `SERVER_MAX_THREADS` | `100` | Tomcat worker threads (prod) |
 | `SHUTDOWN_TIMEOUT` | `20s` | How long graceful shutdown waits for in-flight requests |
 | `JAVA_TOOL_OPTIONS` | set in the Dockerfile | JVM flags (heap sized from the container limit) |
@@ -463,14 +485,20 @@ The repository includes a [`render.yaml`](render.yaml) Blueprint: one Docker web
 
 1. Push the repository to GitHub (or GitLab).
 2. In Render, choose **New → Blueprint** and select the repository. Render reads `render.yaml`, builds the `Dockerfile` (tests run during the build) and deploys.
-3. Wait for the health check to pass. Render calls `GET /actuator/health`, which returns `{"status":"UP"}` without any details. The service is then live at `https://<name>.onrender.com`.
+3. Wait for the health check to pass. Render calls `GET /actuator/health/readiness`, which returns `{"status":"UP"}` once the app can take traffic. The service is then live at `https://<name>.onrender.com`.
 
 On Render:
+* **Region.** `singapore`, the closest Render region to India. Change `region` in `render.yaml` before the first deploy if you need another (a service's region can't be changed later).
 * **Port.** Render injects `PORT` and the app binds to it (`server.port=${PORT:8080}`).
 * **Links.** Canonical and share links use Render's `RENDER_EXTERNAL_URL` automatically. Set `SITE_URL` only for a custom domain.
 * **Logs.** Output is structured ECS JSON on the console (the `prod` profile), which Render's log view shows as is.
-* **Deploys.** Graceful shutdown finishes in-flight requests (up to `SHUTDOWN_TIMEOUT`) on each deploy. The app is stateless, so any instance can serve any request.
-* **Free plan.** Instances sleep when idle, and the first request after that takes longer while the JVM starts.
+* **Deploys.** Only changes to `src/`, `pom.xml`, `Dockerfile` or `.dockerignore` trigger a rebuild (`buildFilter`), so README or CI edits don't redeploy. Render waits for readiness before switching traffic. Graceful shutdown finishes in-flight requests (up to `SHUTDOWN_TIMEOUT`, within `maxShutdownDelaySeconds: 30`). The app is stateless, so any instance can serve any request.
+* **Memory.** The JVM heap is capped at 65% of the container limit, leaving room for metaspace and the code cache within the 512 MB of the free and starter plans.
+* **Free plan.** Instances sleep after about 15 minutes without traffic. The AOT cache keeps the cold start short. To avoid it entirely, use a paid plan, or point an uptime monitor at `/public/health` (GET and HEAD are both allowed).
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs `./mvnw verify` (tests and the coverage gate) on every push and pull request, then builds the production image and smoke-tests it (readiness, the home page and a calculation). Render deploys `main` on its own, so CI is the early warning before a deploy.
 
 | Variable on Render | Required | Value |
 |---|---|---|
@@ -488,7 +516,8 @@ The calculator is a **public, anonymous utility**. It stores no user data, and e
 * Uses modern `SecurityFilterChain` beans with lambda DSL and no deprecated APIs. There are two chains:
   * **Docs chain:** Swagger/OpenAPI paths, `permitAll` or `denyAll` depending on `railtime.docs.enabled`.
   * **Application chain:** page, static assets, `/public/**`, `/actuator/health`, `/actuator/info` and `/api/v1/booking/**` are public. **Everything else is denied** (for example `/actuator/env` returns 403 JSON).
-* Runs **stateless**: no HTTP session, no cookies, no request cache. Basic auth, form login and logout are disabled.
+* Runs **stateless**: no HTTP session, no cookies, no request cache. Basic auth, form login and logout are disabled, and an empty user store stops Spring Boot from creating a default user (and logging its generated password).
+* Allows `HEAD` wherever `GET` is public (pages, `/public/**`, health), so uptime monitors work; everything else stays denied.
 * Skips **CSRF** only for `/api/**`. The JSON API uses no cookies or ambient credentials, so there is nothing to forge.
 * Sets **strict headers**: a Content-Security-Policy with no inline scripts (`script-src 'self'`), `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `Referrer-Policy: strict-origin-when-cross-origin`, a restrictive `Permissions-Policy`, and HSTS (1 year, subdomains) on HTTPS.
 * Rejects **CORS** requests by default. Allowed origins must be opted into via `CORS_ALLOWED_ORIGINS`.
@@ -522,10 +551,10 @@ The calculator is a **public, anonymous utility**. It stores no user data, and e
 ## Testing
 
 ```bash
-mvn verify
+./mvnw verify
 ```
 
-There are **132 tests**. The service layer has 100% line and 97% branch coverage, with ~98% line coverage overall. A JaCoCo gate in `pom.xml` fails the build if service-layer coverage drops below 95% of lines or 90% of branches.
+There are **289 test cases** (counting each parameterised case). The service layer has 99% instruction and 99% branch coverage, with ~97% instruction coverage overall. A JaCoCo gate in `pom.xml` fails the build if service-layer coverage drops below 95% of lines or 90% of branches.
 
 | Suite | Covers |
 |---|---|
@@ -534,7 +563,9 @@ There are **132 tests**. The service layer has 100% line and 97% branch coverage
 | `TatkalCalculatorServiceTest` | SL, FC and 2S → 11:00; 2A, 3A, CC, EC and 3E → 10:00; 1A → `NOT_APPLICABLE`; AC vs non-AC at 10:00; year and leap boundaries |
 | `BookingApiIntegrationTest` | API contract, 200/400/404/405/415, invalid JSON, missing fields, invalid enum, invalid calendar dates, ETag → 304 |
 | `BookingCalculatorControllerTest` | Mockito: binding, invalid input never reaches services, 500 hides internals |
-| `SecurityIntegrationTest` | Public vs denied endpoints, security headers, HSTS, CSRF exemption, no session cookie, CORS rejection, OpenAPI document |
+| `SecurityIntegrationTest` | Public vs denied endpoints, HEAD for uptime monitors, security headers, HSTS, CSRF exemption, no session cookie, CORS rejection, OpenAPI document |
+| `CancellationRefundServiceTest` | 2026 slab boundaries (72 h / 24 h / 8 h to the minute), the switch from 2015 slabs on the revision date, the Vande Bharat Sleeper / Amrit Bharat II scale (no flat minimum, no RAC on VB Sleeper), GST rounding and caps, a real IRCTC cancellation |
+| `ChartPreparationServiceTest` | 05:01–14:00 inclusive band edges, 20:00 previous-day and 10-hour charts, midnight crossing, status over time |
 | `ProductionProfileTest` | Swagger denied in prod, calculator still works |
 | `WebPageTest` | SEO and Open Graph tags, disclaimer, class options, date bounds, fingerprinted assets, cache headers |
 | `TravelClassTest`, `DateTimeUtilTest` | Code parsing and sanitising, category lists, formatting |
@@ -596,8 +627,14 @@ Always treat the official sources as authoritative. If they differ from this REA
 * PIB, refund facilities on cancellation (2015 rules): <https://www.pib.gov.in/PressReleasePage.aspx?PRID=1527662&reg=48&lang=2>
 * North Central Railway, refund rules: <https://ncr.indianrailways.gov.in/print_section.jsp?lang=0&id=0%2C1%2C283%2C363%2C444>
 * Indian Railways GST FAQ (5% GST on cancellation charges for AC / FC): <https://indianrailways.gov.in/GST/General_FAQ.pdf>
-* Central Railway, "Charting timings revised" (first chart by 21:00 the previous day for 05:00–14:00 departures, 8 hours before otherwise; effective 10 July 2025): <https://cr.indianrailways.gov.in/view_detail.jsp?lang=0&dcd=9856&id=0%2C4%2C268>
+* All India Radio, Railways Minister's reforms of 24 March 2026 (refund slabs of 72 h / 24 h / 8 h for all trains; boarding-point change up to 30 minutes before departure): <https://www.newsonair.gov.in/railways-minister-ashwini-vaishnaw-launches-five-reforms-in-railways-52-reforms-in-52-weeks-drive>
+* Railway Board Commercial Circular 08 of 2026 (19 January 2026), implementing G.S.R. 41(E) of 16 January 2026: refund scale for Vande Bharat Sleeper and Amrit Bharat II: <https://www.indianrailwayrules.com/wp-content/uploads/2026/03/Introduction-of-Vande-Bharat-Sleeper-and-Amrit-Bharat-II-with-rationalised-refund-provision-Commercial-Circular-No.-08-of-2026-19.01.2026-indianrailwayrules.com_.pdf>
+* Railway Board letter of 16 December 2025 on charting (first chart by 20:00 the previous day for 05:01–14:00 departures, 10 hours before otherwise), as reported by Business Standard: <https://www.business-standard.com/india-news/indian-railways-rules-2025-new-chart-updates-for-waiting-list-and-racs-nc-125121800905_1.html>. It replaced the July 2025 directive (21:00 / 8 hours).
+* All India Radio, Aadhaar-only online booking in the ARP opening window (from 1 October 2025, extended to midnight from 12 January 2026): <https://www.newsonair.gov.in/railways-to-allow-general-ticket-booking-online-only-for-aadhaar-verified-users-during-first-15-minutes-from-next-month>
+* All India Radio, Aadhaar authentication for online Tatkal (OTP from 15 July 2025): <https://www.newsonair.gov.in/aadhaar-authentication-made-mandatory-for-online-tatkal-ticket-booking-from-july-15>
 * The 60-day ARP (reduced from 120 days) has applied since 1 November 2024, per the Ministry of Railways announcement of October 2024.
+
+Note: as of October 2026, IRCTC's own e-ticket cancellation page still shows the 2015 slabs. The 2026 slabs above follow the Ministry's announcement and the amendment notification.
 
 If a rule changes, update `booking.*` in `application.yml`, or `TravelClass` for class lists, and extend the tests.
 

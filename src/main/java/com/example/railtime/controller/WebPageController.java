@@ -6,6 +6,7 @@ import com.example.railtime.i18n.LanguageLocaleResolver;
 import com.example.railtime.model.TatkalCategory;
 import com.example.railtime.model.TravelClass;
 import com.example.railtime.model.response.BookingWindowResponse;
+import com.example.railtime.model.response.CancellationResponse.RefundRuleSet;
 import com.example.railtime.service.BookingWindowService;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -93,8 +94,13 @@ public class WebPageController {
                 Map.entry("nonAcClasses", classCodes(TatkalCategory.NON_AC)),
                 Map.entry("flatChargeGroups", flatChargeGroups(rules.cancellation())),
                 Map.entry("refundRules", rules.cancellation()),
+                Map.entry("refundSlabs", rules.cancellation().current()),
+                Map.entry("refundPremium", rules.cancellation().premiumSleeper()),
+                Map.entry("refundPremiumEarlyRate", plain(rules.cancellation().premiumSleeper().earlyRatePercent())),
+                Map.entry("refundPremiumLateRate", plain(rules.cancellation().premiumSleeper().lateRatePercent())),
                 Map.entry("refundQuarterRate", plain(rules.cancellation().quarterRatePercent())),
-                Map.entry("refundHalfRate", plain(rules.cancellation().halfRatePercent())));
+                Map.entry("refundHalfRate", plain(rules.cancellation().halfRatePercent())),
+                Map.entry("tatkalAgentMinutes", rules.tatkal().agentBlackoutMinutes()));
     }
 
     /** "2A, 3A, CC, EC, 3E" in the Tatkal dropdown order. */
@@ -182,9 +188,6 @@ public class WebPageController {
         BookingRulesProperties.Cancellation c = rules.cancellation();
         BookingRulesProperties.Chart chart = rules.chart();
         Map<String, Object> refund = new LinkedHashMap<>();
-        refund.put("flatAboveHours", c.flatChargeAboveHours());
-        refund.put("quarterFromHours", c.quarterChargeFromHours());
-        refund.put("cutoffHours", c.confirmedCutoffHours());
         refund.put("racCutoffMinutes", c.racWaitlistCutoffMinutes());
         refund.put("quarterRatePercent", plain(c.quarterRatePercent()));
         refund.put("halfRatePercent", plain(c.halfRatePercent()));
@@ -194,11 +197,29 @@ public class WebPageController {
         Map<String, String> flat = new TreeMap<>();
         c.flatCharges().forEach((code, amount) -> flat.put(code, plain(amount)));
         refund.put("flatCharges", flat);
+        refund.put("revisedFrom", c.revisedFrom().toString());
+        // Per-scale values, keyed by CancellationResponse.RefundRuleSet; app.js overlays the one a result used.
+        BookingRulesProperties.PremiumSleeper premium = c.premiumSleeper();
+        refund.put("ruleSets", Map.of(
+                RefundRuleSet.STANDARD_2026.name(), slabValues(c.current()),
+                RefundRuleSet.STANDARD_2015.name(), slabValues(c.previous()),
+                RefundRuleSet.PREMIUM_SLEEPER_2026.name(), Map.of(
+                        "earlyAboveHours", premium.earlyAboveHours(),
+                        "cutoffHours", premium.cutoffHours(),
+                        "quarterRatePercent", plain(premium.earlyRatePercent()),
+                        "halfRatePercent", plain(premium.lateRatePercent()))));
 
         Map<String, Object> chartRules = new LinkedHashMap<>();
         chartRules.put("finalChartMinutes", chart.finalChartMinutesBefore());
         chartRules.put("effectiveFrom", chart.effectiveFrom().toString());
         return Map.of("refund", refund, "chart", chartRules);
+    }
+
+    private static Map<String, Object> slabValues(BookingRulesProperties.Slabs slabs) {
+        return Map.of(
+                "flatAboveHours", slabs.flatChargeAboveHours(),
+                "quarterFromHours", slabs.quarterChargeFromHours(),
+                "cutoffHours", slabs.confirmedCutoffHours());
     }
 
     private static String plain(BigDecimal value) {

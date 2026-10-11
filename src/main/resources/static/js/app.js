@@ -177,10 +177,12 @@ function showPage(key, { focus = false } = {}) {
     document.body.dataset.page = key;
     placeGeneralCalculator(key);
     views.forEach((view, viewKey) => { view.hidden = viewKey !== key; });
-    document.querySelectorAll('.sb-link[data-nav], .calc-tab').forEach((link) => {
+    document.querySelectorAll('.sb-link[data-nav], .calc-tab, .bn-link[data-nav]').forEach((link) => {
         if (link.dataset.nav === key) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
     });
+    // Pages without their own tab (Status, Reminders, Rules) live under "More".
+    document.querySelector('.bn-more')?.classList.toggle('is-active', key !== 'dashboard' && !CALCULATORS.includes(key));
     document.querySelector('.calc-tabs').hidden = !CALCULATORS.includes(key);
 
     const link = sidebarLink(key);
@@ -276,6 +278,7 @@ function setCollapsed(collapsed) {
 
 function initSidebar() {
     drawerToggle.addEventListener('click', () => (sidebar.classList.contains('is-open') ? closeDrawer() : openDrawer()));
+    document.querySelector('.bn-more')?.addEventListener('click', openDrawer);
     sidebar.querySelector('.sb-close').addEventListener('click', () => closeDrawer({ restoreFocus: true }));
     backdrop.addEventListener('click', () => closeDrawer({ restoreFocus: true }));
     document.addEventListener('keydown', (event) => {
@@ -420,6 +423,7 @@ function collectPayload(form) {
     if (kind === 'refund') {
         payload.totalFare = payload.totalFare.replace(/,/g, '');
         payload.passengers = Number(form.elements.passengers.value);
+        payload.trainType = form.elements.trainType.value;
         // Cancellation moment is optional (server uses "now"), but date and time go together.
         const cancelDate = form.elements.cancellationDate;
         const cancelTime = form.elements.cancellationTime;
@@ -802,11 +806,24 @@ function leadTime(minutes) {
     return t('refund.leadSuffix', text);
 }
 
+/** Shared refund values with the scale the result used (2026 / 2015 / premium sleeper) laid over them. */
+function refundScale(data) {
+    const refund = PAGE.rules.refund;
+    return { ...refund, ...refund.ruleSets?.[data.ruleSet] };
+}
+
+const PREMIUM_SCALE = 'PREMIUM_SLEEPER_2026';
+
 /** The rule that applied, worded from the configured rule values (same wording as the API). */
 function refundRule(data) {
-    const r = PAGE.rules.refund;
+    const r = refundScale(data);
     const flat = r.flatCharges?.[data.travelClass];
     const key = `refund.rule.${data.slab}`;
+    if (data.ruleSet === PREMIUM_SCALE) {
+        // Percentage-only scale: no flat minimum.
+        if (data.slab === 'QUARTER_OF_FARE') return t('refund.rule.premiumEarly', r.earlyAboveHours, r.quarterRatePercent);
+        if (data.slab === 'HALF_OF_FARE') return t('refund.rule.premiumLate', r.earlyAboveHours, r.cutoffHours, r.halfRatePercent);
+    }
     switch (data.slab) {
         case 'FLAT_CHARGE': return t(key, r.flatAboveHours, flat);
         case 'QUARTER_OF_FARE': return t(key, r.flatAboveHours, r.quarterFromHours, r.quarterRatePercent, flat);
@@ -819,7 +836,7 @@ function refundRule(data) {
 }
 
 function refundPill(data) {
-    const r = PAGE.rules.refund;
+    const r = refundScale(data);
     if (!data.refundable) return t('refund.pill.none');
     if (data.slab === 'QUARTER_OF_FARE') return t('refund.pill.QUARTER_OF_FARE', r.quarterRatePercent);
     if (data.slab === 'HALF_OF_FARE') return t('refund.pill.HALF_OF_FARE', r.halfRatePercent);
@@ -827,8 +844,8 @@ function refundPill(data) {
 }
 
 function refundNotes(data) {
-    const r = PAGE.rules.refund;
-    const notes = [t('refund.note.source')];
+    const r = refundScale(data);
+    const notes = [t(`refund.note.source.${data.ruleSet ?? 'STANDARD_2026'}`, longDate(r.revisedFrom))];
     if (r.gstClasses?.includes(data.travelClass)) notes.push(t('refund.note.gst', r.gstRatePercent));
     if (data.ticketStatus === 'CONFIRMED') notes.push(t('refund.note.tdr', r.cutoffHours));
     notes.push(t('refund.note.fees'), t('refund.note.verify'));
@@ -854,6 +871,7 @@ function renderRefund(data) {
     slot(node, 'chip').textContent = ticket;
     addFact(node, t('result.refunded'), t('result.ofFare', percent));
     addFact(node, t('result.class'), cls);
+    if (data.trainType && data.trainType !== 'STANDARD') addFact(node, t('result.train'), t(`train.${data.trainType}`));
 
     const breakdown = slot(node, 'breakdown');
     breakdown.hidden = false;

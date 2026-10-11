@@ -73,18 +73,20 @@ management:
 booking:
   timezone: Asia/Kolkata
   general:
-    # Advance Reservation Period, excluding the date of journey
+    # Advance Reservation Period, excluding the date of journey (60 days since 1 Nov 2024).
+    # On the opening day only Aadhaar-authenticated users can book online until midnight (since 12 Jan 2026).
     advance-days: ${BOOKING_ARP_DAYS:60}
     opening-time: "08:00"
   tatkal:
     days-before-departure: 1
     ac-opening-time: "10:00"
     non-ac-opening-time: "11:00"
+    agent-blackout-minutes: 30   # authorised agents barred from the first 30 minutes (since July 2025)
   validation:
     max-days-in-past: 365
     max-days-in-future: 730
-  # Cancellation charges: Railway Passengers (Cancellation of Tickets and Refund of Fares) Rules, 2015
-  # (as published by IRCTC). Hours are measured before the scheduled departure.
+  # Cancellation charges: Railway Passengers (Cancellation of Ticket and Refund of Fare) Rules, 2015,
+  # as amended in 2026. Hours are measured before the scheduled departure.
   cancellation:
     flat-charges:          # minimum charge per passenger, confirmed tickets (Rs.)
       "[1A]": 240
@@ -99,20 +101,34 @@ booking:
     clerkage: 60           # per passenger, RAC / waitlisted tickets (Rs.)
     gst-rate-percent: 5    # levied on the cancellation charge / clerkage for gst-classes
     gst-classes: [1A, EC, 2A, FC, 3A, CC, 3E]
-    flat-charge-above-hours: 48
-    quarter-charge-from-hours: 12
     quarter-rate-percent: 25
     half-rate-percent: 50
-    confirmed-cutoff-hours: 4
     rac-waitlist-cutoff-minutes: 30
-  # Reservation chart timings: Railway Board directive effective 10 July 2025.
+    # Revised slabs for all standard trains, announced 24 Mar 2026 and rolled out 1–15 Apr 2026.
+    # Cancellations (IST date) from this day use `current`; earlier ones use `previous`.
+    revised-from: ${REFUND_RULES_REVISED_FROM:2026-04-01}
+    current:               # > 72 h flat; 72–24 h 25%; 24–8 h 50%; < 8 h no refund
+      flat-charge-above-hours: 72
+      quarter-charge-from-hours: 24
+      confirmed-cutoff-hours: 8
+    previous:              # original 2015 slabs: > 48 h flat; 48–12 h 25%; 12–4 h 50%; < 4 h no refund
+      flat-charge-above-hours: 48
+      quarter-charge-from-hours: 12
+      confirmed-cutoff-hours: 4
+    # Vande Bharat Sleeper and Amrit Bharat II: G.S.R. 41(E) of 16 Jan 2026 (Commercial Circular 08/2026).
+    premium-sleeper:       # > 72 h 25%; 72–8 h 50%; < 8 h no refund; no flat minimum
+      early-above-hours: 72
+      early-rate-percent: 25
+      late-rate-percent: 50
+      cutoff-hours: 8
+  # Reservation chart timings: Railway Board letter of 16 Dec 2025 (supersedes the July 2025 directive).
   chart:
-    first-chart-hours-before: 8
-    previous-day-band-start: "05:00"
-    previous-day-band-end: "14:00"
-    previous-day-chart-time: "21:00"
+    first-chart-hours-before: 10
+    previous-day-band-start: "05:01"   # inclusive
+    previous-day-band-end: "14:00"     # inclusive
+    previous-day-chart-time: "20:00"
     final-chart-minutes-before: 30
-    effective-from: 2025-07-10
+    effective-from: 2025-12-16
 
 railtime:
   # Public base URL for canonical / Open Graph links. Render sets RENDER_EXTERNAL_URL automatically;

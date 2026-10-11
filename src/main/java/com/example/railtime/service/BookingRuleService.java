@@ -55,14 +55,14 @@ public class BookingRuleService {
     static final String NOTE_SHORTER_ARP =
             "Some trains, including certain intercity/day trains, may have a shorter ARP. "
                     + "Verify the ARP for your specific train on IRCTC.";
-    static final String NOTE_GENERAL_CONDITIONS =
-            "Opening-day booking may be subject to additional IRCTC conditions, such as account "
-                    + "or Aadhaar verification. Check IRCTC before booking.";
+    static final String NOTE_GENERAL_AADHAAR =
+            "On the opening day, from %s IST until midnight, only Aadhaar-authenticated IRCTC users can book "
+                    + "online. Other users can book from the next day. Counter (PRS) booking is not affected.";
     static final String NOTE_TATKAL_QUOTA =
             "Tatkal quota is not available on every train or in every class. Check your train on IRCTC.";
-    static final String NOTE_TATKAL_CONDITIONS =
-            "Additional Tatkal conditions, such as account or Aadhaar verification, may apply. "
-                    + "Check the latest IRCTC rules.";
+    static final String NOTE_TATKAL_AADHAAR =
+            "Online Tatkal needs an Aadhaar-authenticated IRCTC account and an OTP at booking. "
+                    + "Authorised agents cannot book in the first %d minutes of the window.";
     static final String NOTE_WINDOW_OPEN =
             "The booking window has opened. Check IRCTC for availability — this calculator does not "
                     + "show seat availability.";
@@ -237,22 +237,23 @@ public class BookingRuleService {
                         .formatted(DateTimeUtil.formatTime(properties.general().openingTime())),
                 NOTE_ORIGIN_BASIS,
                 NOTE_SHORTER_ARP,
-                NOTE_GENERAL_CONDITIONS);
+                NOTE_GENERAL_AADHAAR.formatted(DateTimeUtil.formatTime(properties.general().openingTime())));
     }
 
     private Map<TatkalCategory, List<String>> buildTatkalNotes() {
         int days = properties.tatkal().daysBeforeDeparture();
         String timing = "Tatkal opens %d %s before the origin departure date (journey date excluded)."
                 .formatted(days, days == 1 ? "day" : "days");
+        String aadhaar = NOTE_TATKAL_AADHAAR.formatted(properties.tatkal().agentBlackoutMinutes());
         Map<TatkalCategory, List<String>> notes = new EnumMap<>(TatkalCategory.class);
         notes.put(TatkalCategory.AC, List.of(timing,
                 "AC classes (%s) open at %s IST.".formatted(codesOf(TatkalCategory.AC),
                         DateTimeUtil.formatTime(properties.tatkal().acOpeningTime())),
-                NOTE_ORIGIN_BASIS, NOTE_TATKAL_QUOTA, NOTE_TATKAL_CONDITIONS));
+                NOTE_ORIGIN_BASIS, NOTE_TATKAL_QUOTA, aadhaar));
         notes.put(TatkalCategory.NON_AC, List.of(timing,
                 "Non-AC classes (%s) open at %s IST.".formatted(codesOf(TatkalCategory.NON_AC),
                         DateTimeUtil.formatTime(properties.tatkal().nonAcOpeningTime())),
-                NOTE_ORIGIN_BASIS, NOTE_TATKAL_QUOTA, NOTE_TATKAL_CONDITIONS));
+                NOTE_ORIGIN_BASIS, NOTE_TATKAL_QUOTA, aadhaar));
         notes.put(TatkalCategory.NOT_LISTED, List.of(
                 "Standard Tatkal classes: AC — %s; non-AC — %s."
                         .formatted(codesOf(TatkalCategory.AC), codesOf(TatkalCategory.NON_AC)),

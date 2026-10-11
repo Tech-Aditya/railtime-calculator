@@ -202,7 +202,16 @@ class BookingRuleServiceTest {
                     "Advance Reservation Period (ARP): 60 days, excluding the date of journey.",
                     "On the opening day, online booking starts at 08:00 AM IST.",
                     BookingRuleService.NOTE_SHORTER_ARP,
-                    BookingRuleService.NOTE_ORIGIN_BASIS);
+                    BookingRuleService.NOTE_ORIGIN_BASIS,
+                    "On the opening day, from 08:00 AM IST until midnight, only Aadhaar-authenticated IRCTC users can "
+                            + "book online. Other users can book from the next day. Counter (PRS) booking is not affected.");
+        }
+
+        @Test
+        void tatkalNotesCoverAadhaarOtpAndTheAgentBlackout() {
+            assertThat(rules.tatkalNotes(TatkalCategory.NON_AC, BookingStatus.NOT_OPEN))
+                    .contains("Online Tatkal needs an Aadhaar-authenticated IRCTC account and an OTP at booking. "
+                            + "Authorised agents cannot book in the first 30 minutes of the window.");
         }
 
         @Test

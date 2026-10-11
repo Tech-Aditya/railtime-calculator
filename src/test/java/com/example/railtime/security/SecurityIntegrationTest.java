@@ -2,6 +2,7 @@ package com.example.railtime.security;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -63,6 +64,19 @@ class SecurityIntegrationTest {
     @Test
     void actuatorHealthIsPublic() throws Exception {
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+        mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
+    }
+
+    /** Uptime monitors (e.g. to keep a free Render instance awake) probe with HEAD. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/", "/refund", "/public/health", "/actuator/health", "/actuator/health/readiness"})
+    void headIsAllowedWhereGetIsPublic(String path) throws Exception {
+        mvc.perform(head(path)).andExpect(status().isOk());
+    }
+
+    @Test
+    void headIsStillDeniedElsewhere() throws Exception {
+        mvc.perform(head("/actuator/env")).andExpect(status().isForbidden());
     }
 
     @ParameterizedTest

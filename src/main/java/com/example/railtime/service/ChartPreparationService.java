@@ -15,20 +15,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Estimates reservation chart times, per the Railway Board directive effective 10 July 2025:
+ * Estimates reservation chart times, per the Railway Board letter of 16 December 2025 (which
+ * replaced the July 2025 directive):
  * <ul>
- *   <li>Departures from 05:00 up to (not including) 14:00: first chart by 21:00 the previous day.</li>
- *   <li>All other departures: first chart 8 hours before departure.</li>
+ *   <li>Departures from 05:01 up to and including 14:00: first chart by 20:00 the previous day.</li>
+ *   <li>All other departures (14:01 to 05:00): first chart 10 hours before departure.</li>
  *   <li>Final chart: 30 minutes before departure.</li>
  * </ul>
- * The published wording gives both bands with 14:00 as a boundary; this implementation places
- * exactly 14:00 in the "8 hours before" band.
+ * Both band limits are inclusive, matching the published "05:01 to 14:00" wording.
  */
 @Service
 public class ChartPreparationService {
 
     private static final Logger log = LoggerFactory.getLogger(ChartPreparationService.class);
 
+    static final String NOTE_BEFORE_RULES =
+            "This departure is before these timings took effect, when earlier charting times applied.";
     static final String NOTE_VERIFY = "Charting times can be revised by Indian Railways. Check the chart status on IRCTC.";
 
     private final BookingRuleService rules;
@@ -73,7 +75,7 @@ public class ChartPreparationService {
 
     ChartRule ruleFor(LocalTime departureTime) {
         boolean inPreviousEveningBand = !departureTime.isBefore(config.previousDayBandStart())
-                && departureTime.isBefore(config.previousDayBandEnd());
+                && !departureTime.isAfter(config.previousDayBandEnd());
         return inPreviousEveningBand ? ChartRule.PREVIOUS_EVENING : ChartRule.HOURS_BEFORE_DEPARTURE;
     }
 
@@ -99,12 +101,12 @@ public class ChartPreparationService {
 
     private List<String> notes(ChartRequest request) {
         List<String> notes = new ArrayList<>(4);
-        notes.add("Based on the Railway Board directive effective %s."
+        notes.add("Based on the Railway Board charting rules effective %s."
                 .formatted(DateTimeUtil.formatLongDate(config.effectiveFrom())));
         notes.add("The final chart is prepared %d minutes before departure; vacant berths can be booked until then."
                 .formatted(config.finalChartMinutesBefore()));
         if (request.departureDate().isBefore(config.effectiveFrom())) {
-            notes.add("This departure is before the directive took effect, when earlier charting times applied.");
+            notes.add(NOTE_BEFORE_RULES);
         }
         notes.add(NOTE_VERIFY);
         return List.copyOf(notes);

@@ -1,14 +1,26 @@
 # Render Blueprint: one stateless Docker web service (no database or other infrastructure).
 # Deploy: Render dashboard → New → Blueprint → pick this repository.
+# Reference: https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: railtime-calculator
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: free                      # change to starter or higher for an always-on instance
+    region: singapore               # closest Render region to India (lowest latency for IST users)
+    plan: free                      # free instances sleep when idle; starter or higher stays always on
     autoDeploy: true
-    healthCheckPath: /actuator/health
+    # Ready only once the Spring context is up; Render waits for this before switching traffic.
+    healthCheckPath: /actuator/health/readiness
+    # Time Render waits after SIGTERM before killing the old instance; covers SHUTDOWN_TIMEOUT (20s).
+    maxShutdownDelaySeconds: 30
+    # Rebuild only when something that goes into the image changes (not for README or CI edits).
+    buildFilter:
+      paths:
+        - src/**
+        - pom.xml
+        - Dockerfile
+        - .dockerignore
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod

@@ -1,6 +1,7 @@
 package com.example.railtime.model.request;
 
 import com.example.railtime.model.TicketStatus;
+import com.example.railtime.model.TrainType;
 import com.example.railtime.model.TravelClass;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
@@ -16,9 +17,11 @@ import java.time.LocalTime;
 /**
  * Input for the cancellation refund estimate. All times are IST.
  *
- * @param totalFare         total fare paid for all passengers on the ticket (excluding IRCTC convenience fee)
+ * @param totalFare         ticket fare for all passengers: IRCTC's "Booking Amount", excluding the
+ *                          convenience fee and travel insurance (those are never part of the fare refund)
  * @param cancellationDate  optional; defaults to now
  * @param cancellationTime  optional; defaults to now
+ * @param trainType         optional; defaults to {@link TrainType#STANDARD}
  */
 @Schema(description = "Cancellation refund estimate request (times in IST)")
 public record CancellationRequest(
@@ -31,7 +34,9 @@ public record CancellationRequest(
         @NotNull(message = "Ticket status is required")
         TicketStatus ticketStatus,
 
-        @Schema(description = "Total fare paid for all passengers, in rupees", example = "2450.00",
+        @Schema(description = "Ticket fare for all passengers, in rupees: the \"Booking Amount\" shown by IRCTC. "
+                + "Exclude the convenience fee and travel insurance, which are not part of the fare refund.",
+                example = "2450.00",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Fare is required")
         @DecimalMin(value = "1", message = "Fare must be at least ₹1")
@@ -57,5 +62,21 @@ public record CancellationRequest(
         LocalDate cancellationDate,
 
         @Schema(type = "string", format = "time", description = "When you plan to cancel (IST); defaults to now", example = "10:00")
-        LocalTime cancellationTime) {
+        LocalTime cancellationTime,
+
+        @Schema(description = "Train type; Vande Bharat Sleeper and Amrit Bharat II have their own refund scale. "
+                + "Defaults to STANDARD.", example = "STANDARD")
+        TrainType trainType) {
+
+    public CancellationRequest {
+        trainType = trainType == null ? TrainType.STANDARD : trainType;
+    }
+
+    /** A standard-train request. */
+    public CancellationRequest(TravelClass travelClass, TicketStatus ticketStatus, BigDecimal totalFare, int passengers,
+                               LocalDate departureDate, LocalTime departureTime,
+                               LocalDate cancellationDate, LocalTime cancellationTime) {
+        this(travelClass, ticketStatus, totalFare, passengers, departureDate, departureTime,
+                cancellationDate, cancellationTime, TrainType.STANDARD);
+    }
 }
