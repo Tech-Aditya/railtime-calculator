@@ -1,5 +1,6 @@
 package com.example.railtime.exception;
 
+import com.example.railtime.config.RequestLoggingFilter;
 import com.example.railtime.model.response.ErrorResponse;
 import com.example.railtime.properties.BookingRulesProperties;
 import java.time.Clock;
@@ -25,9 +26,13 @@ public class ErrorResponseFactory {
         this.properties = properties;
     }
 
-    /** A short, random, non-sequential reference (8 hex characters) to correlate a response with the log. */
+    /**
+     * The reference that correlates a response with the log: the current request's id (see
+     * {@link RequestLoggingFilter}), or a short random one outside a request.
+     */
     public String newRequestId() {
-        return HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
+        String current = RequestLoggingFilter.currentRequestId();
+        return current != null ? current : HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
     }
 
     public ErrorResponse create(ApiErrorCode code, String message, String path) {

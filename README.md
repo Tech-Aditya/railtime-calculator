@@ -434,12 +434,23 @@ To skip tests in the image build, for example when CI has already run them, add 
 
 | | `dev` (default) | `prod` |
 |---|---|---|
-| Logging | Human-readable, `com.example.railtime` at DEBUG | **ECS JSON** (structured), WARN root / INFO app |
+| Logging | Compact one-line console (time, level, class, request id), app at DEBUG, framework start-up chatter hidden | **ECS JSON** (structured, `requestId` and `service.environment` fields), WARN root / INFO app |
 | Swagger | Enabled | Disabled unless `API_DOCS_ENABLED=true` |
 | Error detail | Exception type appended to 500 messages | Generic message only |
 | Templates/assets | No caching, live reload | Cached; fingerprinted assets cached for 1 year |
 | Proxy headers | n/a | `X-Forwarded-*` honoured (TLS terminated at the proxy) |
 | Health details | Shown | Hidden |
+
+### Logging
+
+Every request gets a short id (`RequestLoggingFilter`). It is returned in the `X-Request-Id` header (a safe incoming `X-Request-Id` from a proxy is reused), quoted as `requestId` in error responses, and attached to every log line written while handling the request. Each page or API call writes one access line, for example:
+
+```
+16:56:24.695  INFO ReservationCalculatorService f25c7f47 event=calculation type=GENERAL_RESERVATION journeyDate=2026-12-20 … status=NOT_OPEN
+16:56:24.720  INFO RequestLoggingFilter         f25c7f47 event=request method=POST path=/api/v1/booking/general/calculate status=200 durationMs=85
+```
+
+Health checks, actuator calls and static files (CSS, JS, images, icons) are not logged, so Render's health probes don't flood the log. Responses with status 500 or above are logged at WARN. `.mvn/jvm.config` silences the `sun.misc.Unsafe` warnings that Maven prints on JDK 25.
 
 ### Rule configuration (`application.yml`)
 
@@ -554,7 +565,7 @@ The calculator is a **public, anonymous utility**. It stores no user data, and e
 ./mvnw verify
 ```
 
-There are **289 test cases** (counting each parameterised case). The service layer has 99% instruction and 99% branch coverage, with ~97% instruction coverage overall. A JaCoCo gate in `pom.xml` fails the build if service-layer coverage drops below 95% of lines or 90% of branches.
+There are **303 test cases** (counting each parameterised case). The service layer has 99% instruction and 99% branch coverage, with ~97% instruction coverage overall. A JaCoCo gate in `pom.xml` fails the build if service-layer coverage drops below 95% of lines or 90% of branches.
 
 | Suite | Covers |
 |---|---|

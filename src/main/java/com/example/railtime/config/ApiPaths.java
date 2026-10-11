@@ -17,6 +17,8 @@ public final class ApiPaths {
     public static final String[] DOCS = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**"};
     public static final String[] STATIC_RESOURCES = {
         "/", "/css/**", "/js/**", "/images/**", "/favicon.ico", "/favicon.svg",
+        // iOS asks for these at the site root when a page is added to the home screen.
+        "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png",
         "/robots.txt", "/site.webmanifest", "/error"
     };
 

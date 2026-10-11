@@ -76,11 +76,11 @@ class LanguageSwitchTest {
         String english = html(get("/"));
         assertThat(english)
                 .contains("data-today=\"latest\">27 Nov 2026<", "data-today=\"next\">28 Nov 2026<")
-                .contains("data-today=\"next-time\">08:00 AM IST<", "data-today=\"next-day\">Tomorrow<", "data-today=\"tatkal\">29 Sep 2026<")
+                .contains("data-today=\"next-time\">08:00 AM IST<", "data-today=\"next-day\">Opens tomorrow<", "data-today=\"tatkal\">29 Sep 2026<")
                 .contains(">AC · 10:00 AM<", ">Non-AC · 11:00 AM<");
 
         assertThat(html(get("/").param("lang", "hi")))
-                .contains("data-today=\"latest\">27 नवंबर 2026<", "data-today=\"next-day\">कल<")
+                .contains("data-today=\"latest\">27 नवंबर 2026<", "data-today=\"next-day\">कल खुलेगी<")
                 .contains(">एसी · 10:00 AM<", ">नॉन-एसी · 11:00 AM<");
     }
 

@@ -2,11 +2,21 @@
   "name": "RailTime Calculator",
   "short_name": "RailTime",
   "description": "Calculate IRCTC general reservation and Tatkal booking opening dates and times.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f7f5f0",
   "theme_color": "#14264f",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/images/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/images/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Tatkal opening time", "short_name": "Tatkal", "url": "/tatkal" },
+    { "name": "Refund calculator", "short_name": "Refund", "url": "/refund" },
+    { "name": "Chart preparation time", "short_name": "Chart", "url": "/chart" }
   ]
 }

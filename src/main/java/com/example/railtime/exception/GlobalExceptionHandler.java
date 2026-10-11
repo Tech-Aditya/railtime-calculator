@@ -51,6 +51,7 @@ public class GlobalExceptionHandler {
     static final String MSG_BAD_TIME_FORMAT = "Times must be valid 24-hour times (HH:mm)";
     static final String MSG_INTERNAL = "Something went wrong on our side. Please try again later.";
     static final String MSG_NOT_FOUND = "No API endpoint exists at this path";
+    static final String MSG_NOTHING_HERE = "Nothing exists at this path";
     static final String MSG_NOT_ACCEPTABLE = "This API only returns JSON. Send 'Accept: application/json' or omit the Accept header.";
 
     private final ErrorResponseFactory errors;
@@ -231,7 +232,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoResourceFoundException.class)
     ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException ex, HttpServletRequest request) {
-        return respond(ApiErrorCode.NOT_FOUND, MSG_NOT_FOUND, request, List.of());
+        boolean api = request.getRequestURI().startsWith(request.getContextPath() + "/api/");
+        return respond(ApiErrorCode.NOT_FOUND, api ? MSG_NOT_FOUND : MSG_NOTHING_HERE, request, List.of());
     }
 
     /** The client went away (closed tab, timeout): nothing can be sent, so only note it. */

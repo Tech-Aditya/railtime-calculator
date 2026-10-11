@@ -22,8 +22,12 @@ management:
       show-details: always
 
 logging:
+  pattern:
+    # Compact, readable console: time, level, class, request id (see RequestLoggingFilter), message.
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr(%-28.28logger{0}){cyan} %clr(%-8.8X{requestId:-}){magenta} %m%n%wEx"
   level:
     root: INFO
     com.example.railtime: DEBUG
-    org.springframework.security: INFO
-    org.springframework.web: INFO
+    # Framework start-up chatter adds nothing day to day; warnings and errors still show.
+    org.springframework: WARN
+    org.apache: WARN

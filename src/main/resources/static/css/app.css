@@ -419,6 +419,8 @@ a:hover { color: var(--navy-hover); }
     color: var(--muted); font: 600 .85rem var(--font); cursor: pointer;
 }
 .text-btn:hover { color: var(--text); background: var(--neutral-tint); }
+/* Touch screens: at least 44px tall, so Reset is easy to hit next to Calculate. */
+@media (pointer: coarse) { .text-btn { min-height: 44px; padding-inline: 12px; } }
 .text-btn:focus-visible { outline: none; box-shadow: var(--focus); }
 .text-link {
     display: inline-flex; align-items: center; gap: 6px; color: var(--k-ink, var(--navy));
@@ -645,6 +647,14 @@ a:hover { color: var(--navy-hover); }
 /* ---------- calculator page ---------- */
 .calc-layout { display: grid; gap: 16px; align-items: start; }
 @media (min-width: 1000px) { .calc-layout { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); } }
+/* Single column (phones, tablets): the result follows the form directly, so it appears right below
+   the Calculate button; "How it works" moves after it instead of pushing the result off-screen. */
+@media (max-width: 999px) {
+    .view:has(> .calc-layout) { display: flex; flex-direction: column; }
+    .view > .calc-layout { display: contents; }
+    .view > .calc-layout > .context-card { order: 1; margin-top: 16px; }
+    .view > .rules-accordion { order: 2; }
+}
 
 .calc-card { overflow: hidden; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .card-hero {

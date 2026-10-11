@@ -23,4 +23,16 @@
     if (sidebar === 'collapsed') {
         root.setAttribute('data-sidebar', 'collapsed');
     }
+
+    // Mobile browser toolbar colour follows the page background (--bg), including manual theme switches.
+    function syncThemeColor() {
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+            meta.setAttribute('content', root.getAttribute('data-theme') === 'dark' ? '#0d1320' : '#f6f7fb');
+        }
+    }
+    syncThemeColor();
+    if (window.MutationObserver) {
+        new MutationObserver(syncThemeColor).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    }
 }());

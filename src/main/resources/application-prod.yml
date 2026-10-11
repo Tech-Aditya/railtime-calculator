@@ -15,9 +15,14 @@ server:
     connection-timeout: 10s
 
 logging:
+  # One JSON object per line (Elastic Common Schema): Render's log view and any log service can
+  # filter on fields. The request id from RequestLoggingFilter is included as "requestId".
   structured:
     format:
       console: ecs
+    ecs:
+      service:
+        environment: prod
   level:
     root: WARN
     com.example.railtime: INFO

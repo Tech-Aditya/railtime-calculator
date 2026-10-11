@@ -53,7 +53,7 @@ class WebPageTest {
                 .contains("<option value=\"1A\">First AC (1A)</option>")
                 .contains("min=\"2025-09-28\"")
                 .contains("max=\"2028-09-27\"")
-                .contains(">Next general booking<", ">Other calculators<")
+                .contains(">Next journey date to open<", ">Other calculators<")
                 .doesNotContain("General reservation for journeys on")
                 .contains("id=\"result-general\"", "id=\"result-tatkal\"", "id=\"result-refund\"", "id=\"result-chart\"")
                 .containsPattern("/css/app-[0-9a-f]{32}\\.css")

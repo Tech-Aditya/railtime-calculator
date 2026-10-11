@@ -993,10 +993,14 @@ function animateResultHeight(region, { from, to }) {
  */
 function scrollResultIntoView(region) {
     const header = document.querySelector('.app-header')?.getBoundingClientRect().height ?? 0;
+    // On phones the fixed tab bar covers the bottom of the viewport.
+    const bar = document.querySelector('.bottom-nav');
+    const footer = bar && getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().height : 0;
     const rect = region.getBoundingClientRect(); // final layout: no height animation is running
-    const available = window.innerHeight - header;
+    const visibleBottom = window.innerHeight - footer;
+    const available = visibleBottom - header;
     const margin = 16;
-    if (rect.top >= header + margin && rect.bottom <= window.innerHeight - margin) return false;
+    if (rect.top >= header + margin && rect.bottom <= visibleBottom - margin) return false;
     const offset = rect.height + 2 * margin <= available ? (available - rect.height) / 2 : margin;
     window.scrollTo({
         top: Math.max(0, window.scrollY + rect.top - header - offset),

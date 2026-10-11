@@ -4,6 +4,7 @@ import com.example.railtime.controller.Page;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.web.filter.ShallowEtagHeaderFilter;
 
 /**
@@ -24,6 +25,15 @@ public class WebConfig {
         registration.addUrlPatterns(Page.PATHS);
         registration.addUrlPatterns(ApiPaths.BOOKING + ApiPaths.RULES, ApiPaths.PUBLIC + "/*");
         registration.setName("etagFilter");
+        return registration;
+    }
+
+    /** First in line, so security rejections and errors are logged with the request id too. */
+    @Bean
+    FilterRegistrationBean<RequestLoggingFilter> requestLoggingFilter() {
+        FilterRegistrationBean<RequestLoggingFilter> registration = new FilterRegistrationBean<>(new RequestLoggingFilter());
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        registration.setName("requestLoggingFilter");
         return registration;
     }
 }
